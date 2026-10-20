@@ -285,6 +285,26 @@ function renderTrialBalance(){
   const lbl=document.getElementById("tbPeriodLabel");
   if(lbl) lbl.textContent = "Recalculates automatically from every posted transaction and adjusting entry. " +
     (state.fyEnabled ? "Using your fiscal year (starts "+monthNames[state.fyStartMonth-1]+")." : "Using the calendar year (Jan–Dec).");
+
+  // Flag any line whose account code no longer matches anything in the Chart of Accounts,
+  // so missing amounts are visible instead of silently vanishing from the totals above.
+  const validCodes=new Set(state.accounts.map(a=>a.code));
+  const missingCodes=new Set(); let missingAmt=0;
+  state.txns.forEach(t=>t.lines.forEach(l=>{
+    if(!validCodes.has(l.account)){ missingCodes.add(l.account||"(blank)"); missingAmt+=l.debit+l.credit; }
+  }));
+  let warnEl=document.getElementById("tbMissingWarn");
+  if(!warnEl){
+    warnEl=document.createElement("div"); warnEl.id="tbMissingWarn";
+    warnEl.style.cssText="margin-top:10px;padding:10px 12px;border-radius:8px;background:var(--bad-soft);color:var(--bad);font-size:12.5px;";
+    bar.insertAdjacentElement("afterend", warnEl);
+  }
+  if(missingCodes.size){
+    warnEl.style.display="block";
+    warnEl.textContent = `⚠ ${money(missingAmt/2)} total from entries referencing an account code that no longer exists in your Chart of Accounts (missing code${missingCodes.size>1?'s':''}: ${[...missingCodes].join(", ")}). Add that account back with the same code, or edit those entries, to include them in the trial balance.`;
+  } else {
+    warnEl.style.display="none";
+  }
 }
 
 // ---------- Confirm modal ----------
