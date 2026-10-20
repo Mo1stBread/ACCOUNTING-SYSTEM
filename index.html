@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ledgerline — Accounting Management System</title>
+<link rel="stylesheet" href="styles.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+</head>
+<body>
+<div id="authScreen">
+  <div class="card">
+    <h2>Sign in to Ledgerline</h2>
+    <p class="sub" id="authSub">Your data stays private to your account unless you choose to share it.</p>
+    <div class="field"><label>Email</label><input id="authEmail" type="email"></div>
+    <div class="field" style="margin-top:8px"><label>Password</label><input id="authPass" type="password"></div>
+    <div class="errtext" id="authErr"></div>
+    <div class="row" style="margin-top:10px">
+      <button class="btn" id="authSignIn">Sign in</button>
+      <button class="btn ghost" id="authSignUp">Create account</button>
+    </div>
+  </div>
+</div>
+
+<div id="appScreen" style="display:none">
+<header>
+  <div class="headrow">
+    <div class="brand"><div class="mark">$</div><div><h1>Ledgerline</h1><p>Accounting for your business</p></div></div>
+    <div class="ctl">
+      <select id="currencySel"><option value="PHP">₱ PHP</option><option value="USD">$ USD</option></select>
+      <span style="width:1px;height:18px;background:var(--border)"></span>
+      <label class="switch"><input type="checkbox" id="fyToggle"><span class="slider"></span></label>
+      <span id="fyLabel">Calendar year (Jan–Dec)</span>
+      <select id="fyMonth" style="display:none"></select>
+      <span style="width:1px;height:18px;background:var(--border)"></span>
+      <label class="switch"><input type="checkbox" id="shareToggle"><span class="slider"></span></label>
+      <span id="shareLabel">Private (only you)</span>
+      <button class="btn ghost" id="copyLinkBtn" style="display:none">Copy share link</button>
+      <button class="btn ghost" id="signOutBtn">Sign out</button>
+    </div>
+  </div>
+  <nav>
+    <button class="tab active" data-view="coa">Chart of Accounts</button>
+    <button class="tab" data-view="txn">Transactions</button>
+    <button class="tab" data-view="adj">Adjusting Entries</button>
+    <button class="tab" data-view="tb">Trial Balance</button>
+  </nav>
+  <div id="viewOnlyBanner" style="display:none;max-width:1100px;margin:10px auto 0;padding:8px 14px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;font-size:12.5px;color:var(--ink-2)">You're viewing this ledger — only the owner can make changes.</div>
+</header>
+<main>
+  <section class="view active" id="view-coa">
+    <div class="card">
+      <h2>Add an account</h2>
+      <p class="sub">Every account needs a code, a name, and a type.</p>
+      <div class="row">
+        <div class="field"><label>Code</label><input id="coaCode"><div class="errtext" id="err-coaCode"></div></div>
+        <div class="field" style="flex:2"><label>Name</label><input id="coaName"><div class="errtext" id="err-coaName"></div></div>
+        <div class="field"><label>Type</label><select id="coaType"><option>Asset</option><option>Liability</option><option>Equity</option><option>Revenue</option><option>Expense</option></select></div>
+      </div>
+      <div style="margin-top:12px"><button class="btn" id="addAccountBtn">Add account</button></div>
+    </div>
+    <div class="card"><h2>Your accounts</h2>
+      <div class="tablewrap"><table id="coaTable"><thead><tr><th>Code</th><th>Name</th><th>Type</th><th>Normal balance</th><th></th></tr></thead><tbody></tbody></table></div>
+      <div class="empty" id="coaEmpty" style="display:none">No accounts yet.</div>
+    </div>
+  </section>
+  <section class="view" id="view-txn">
+    <div class="card">
+      <h2>Record a transaction</h2>
+      <p class="sub">Debits must equal credits. For period-end adjustments, use the Adjusting Entries tab instead.</p>
+      <div class="row">
+        <div class="field"><label>Date</label><input type="date" id="txnDate"><div class="errtext" id="err-txnDate"></div></div>
+        <div class="field" style="flex:2"><label>Description</label><input id="txnDesc"><div class="errtext" id="err-txnDesc"></div></div>
+      </div>
+      <div style="margin-top:10px" id="txnLines"></div>
+      <button class="btn ghost" id="addLineBtn">+ Add line</button>
+      <div class="field" style="margin-top:12px"><label>Comment (optional)</label><textarea id="txnComment" rows="2"></textarea></div>
+      <div class="balancebar" id="balanceBar"></div>
+      <div class="errtext" id="err-txnLines"></div>
+      <div style="margin-top:10px"><button class="btn" id="postTxnBtn">Post transaction</button></div>
+    </div>
+    <div class="card"><h2>Transaction history</h2>
+      <div class="tablewrap"><table id="txnTable"><thead><tr><th>Date</th><th>Description</th><th>Lines</th><th>Comment</th><th class="num">Amount</th><th></th></tr></thead><tbody></tbody></table></div>
+      <div class="empty" id="txnEmpty" style="display:none">No transactions yet.</div>
+    </div>
+  </section>
+  <section class="view" id="view-adj">
+    <div class="card">
+      <h2>Record an adjusting entry</h2>
+      <p class="sub">For period-end items like accrued expenses, depreciation, prepaid write-offs, or corrections. A comment explaining why is required.</p>
+      <div class="row">
+        <div class="field"><label>Date</label><input type="date" id="adjDate"><div class="errtext" id="err-adjDate"></div></div>
+        <div class="field" style="flex:2"><label>Description</label><input id="adjDesc"><div class="errtext" id="err-adjDesc"></div></div>
+      </div>
+      <div style="margin-top:10px" id="adjLines"></div>
+      <button class="btn ghost" id="addAdjLineBtn">+ Add line</button>
+      <div class="field" style="margin-top:12px"><label>Comment (required) — why this adjustment is needed</label><textarea id="adjComment" rows="2" placeholder="e.g. Accrue October rent not yet invoiced"></textarea></div>
+      <div class="balancebar" id="adjBalanceBar"></div>
+      <div class="errtext" id="err-adjLines"></div>
+      <div style="margin-top:10px"><button class="btn" id="postAdjBtn">Post adjusting entry</button></div>
+    </div>
+    <div class="card"><h2>Adjusting entry history</h2>
+      <div class="tablewrap"><table id="adjTable"><thead><tr><th>Date</th><th>Description</th><th>Lines</th><th>Comment</th><th class="num">Amount</th><th></th></tr></thead><tbody></tbody></table></div>
+      <div class="empty" id="adjEmpty" style="display:none">No adjusting entries yet.</div>
+    </div>
+  </section>
+  <section class="view" id="view-tb">
+    <div class="card"><h2>Trial balance</h2>
+      <p class="sub" id="tbPeriodLabel">Recalculates automatically from every posted transaction and adjusting entry.</p>
+      <div class="tablewrap"><table id="tbTable"><thead>
+        <tr><th rowspan="2">Code</th><th rowspan="2">Account</th><th rowspan="2">Type</th>
+          <th colspan="2" style="text-align:center">Unadjusted</th>
+          <th colspan="2" style="text-align:center">Adjustments</th>
+          <th colspan="2" style="text-align:center">Adjusted</th></tr>
+        <tr><th class="num">Debit</th><th class="num">Credit</th><th class="num">Debit</th><th class="num">Credit</th><th class="num">Debit</th><th class="num">Credit</th></tr>
+      </thead><tbody></tbody></table></div>
+      <div class="balancebar" id="tbBalanceBar"></div>
+    </div>
+  </section>
+</main>
+</div>
+<div class="toast" id="toast"></div>
+<div class="modal-bg" id="confirmBg"><div class="modal"><h2 style="margin-top:0;font-size:15px" id="confirmText"></h2>
+<div class="row" style="margin-top:14px"><button class="btn ghost" id="confirmNo">Cancel</button><button class="btn danger" id="confirmYes">Delete</button></div></div></div>
+<script src="app.js"></script>
+</body>
+</html>
