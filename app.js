@@ -1,3 +1,6 @@
+const SUPABASE_URL = "https://bztxlsjzpbcjyymqhdpf.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ6dHhsc2p6cGJjanl5bXFoZHBmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI0NzU5MzEsImV4cCI6MjEwODA1MTkzMX0.9oiDBBlbxxNepsgCApRckePOLs9lWbG5v8XxxmV72xQ";
+
 (function(){
 "use strict";
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
