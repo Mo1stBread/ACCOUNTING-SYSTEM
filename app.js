@@ -3,7 +3,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 
 (function(){
 "use strict";
-const sb = supabase.createClient(sb_publishable_PVprMN90RF_Pqzf_EGEvLQ_6PzE-EyR, SUPABASE_eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ6dHhsc2p6cGJjanl5bXFoZHBmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI0NzU5MzEsImV4cCI6MjEwODA1MTkzMX0.9oiDBBlbxxNepsgCApRckePOLs9lWbG5v8XxxmV72xQANON_KEY);
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 let user=null, myRow=null, viewingId=null, viewingOwn=true, channel=null;
 let state = { accounts:[], txns:[], fyEnabled:false, fyStartMonth:1, currency:"PHP" };
 const defaultAccounts=[{code:"1000",name:"Cash",type:"Asset"},{code:"1100",name:"Accounts Receivable",type:"Asset"},
