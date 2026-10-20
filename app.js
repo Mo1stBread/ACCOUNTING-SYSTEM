@@ -1,6 +1,7 @@
 const SUPABASE_URL = "https://bztxlsjzpbcjyymqhdpf.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ6dHhsc2p6cGJjanl5bXFoZHBmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI0NzU5MzEsImV4cCI6MjEwODA1MTkzMX0.9oiDBBlbxxNepsgCApRckePOLs9lWbG5v8XxxmV72xQ";
 
+
 (function(){
 "use strict";
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -312,7 +313,7 @@ let pendingAction=null;
 function confirmAction(text,fn){ document.getElementById("confirmText").textContent=text; pendingAction=fn; document.getElementById("confirmBg").classList.add("show"); }
 document.getElementById("confirmNo").addEventListener("click",()=>document.getElementById("confirmBg").classList.remove("show"));
 document.getElementById("confirmYes").addEventListener("click",()=>{ if(pendingAction) pendingAction(); document.getElementById("confirmBg").classList.remove("show"); });
-
+  
 document.getElementById("txnDate").value=new Date().toISOString().slice(0,10);
 addLine("txnLines"); addLine("txnLines"); updateBalanceBar("txnLines");
 addLine("adjLines"); addLine("adjLines"); updateBalanceBar("adjLines");
