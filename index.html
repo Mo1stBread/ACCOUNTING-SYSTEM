@@ -11,7 +11,8 @@
 
 <div id="authScreen">
   <div class="card">
-    <h2>Sign in</h2>
+    <h2>Sign in to Ledgerline</h2>
+    <p class="sub">You must be signed in to use this system — your data is private to your account.</p>
     <div class="field"><label>Email</label><input id="authEmail" type="email"></div>
     <div class="field" style="margin-top:8px"><label>Password</label><input id="authPass" type="password"></div>
     <div class="errtext" id="authErr"></div>
@@ -25,7 +26,7 @@
 <div id="appScreen" style="display:none">
 <header>
   <div class="headrow">
-    <div class="brand"><div class="mark">$</div><div><h1></h1><p>Accounting for your business</p></div></div>
+    <div class="brand"><div class="mark">$</div><div><h1>Ledgerline</h1><p>Accounting for your business</p></div></div>
     <div class="ctl">
       <button class="btn ghost" id="exportBtn">Export to Excel</button>
       <button class="btn ghost" id="signOutBtn">Sign out</button>
@@ -124,17 +125,62 @@
       <div class="empty" id="jeEmpty" style="display:none">No journal entries yet.</div>
     </div>
   </section>
-  <section class="view" id="view-tb"><div class="card"><h2>Trial Balance</h2><p class="sub">Coming in Phase 3.</p></div></section>
-  <section class="view" id="view-adj"><div class="card"><h2>Adjusting Entries</h2><p class="sub">Coming in Phase 3: editable adjusting journal entries.</p></div></section>
-  <section class="view" id="view-atb"><div class="card"><h2>Adjusted Trial Balance</h2><p class="sub">Coming in Phase 3: with out-of-balance highlighting.</p></div></section>
+  <section class="view" id="view-tb">
+    <div class="card">
+      <h2>Trial balance</h2>
+      <p class="sub">Recalculates automatically from every posted (non-adjusting) journal entry.</p>
+      <div class="tablewrap"><table id="tbTable"><thead><tr><th>Number</th><th>Account</th><th>Type</th><th style="text-align:right">Debit</th><th style="text-align:right">Credit</th></tr></thead><tbody></tbody></table></div>
+      <div class="balancebar" id="tbBalanceBar" style="margin-top:10px;padding:10px 12px;border-radius:8px;background:var(--surface-2)"></div>
+    </div>
+  </section>
+
+  <section class="view" id="view-adj">
+    <div class="card">
+      <h2 id="adjFormTitle">New adjusting entry</h2>
+      <p class="sub">An explanation is required — this is the comment that will show in the list below.</p>
+      <div class="row">
+        <div class="field"><label>Date</label><input type="date" id="adjDate"><div class="errtext" id="err-adjDate"></div></div>
+        <div class="field" style="flex:2"><label>Description</label><input id="adjDesc"><div class="errtext" id="err-adjDesc"></div></div>
+      </div>
+      <div class="field" style="margin-top:8px"><label>Explanation (required)</label><textarea id="adjComment" rows="2" placeholder="e.g. Accrue October rent not yet invoiced"></textarea></div>
+      <div id="adjLines" style="margin-top:10px"></div>
+      <button class="btn ghost" id="addAdjLineBtn">+ Add line</button>
+      <div class="balancebar" id="adjBalanceBar" style="margin-top:10px;padding:10px 12px;border-radius:8px;background:var(--surface-2)"></div>
+      <div class="errtext" id="err-adjLines"></div>
+      <div class="row" style="margin-top:10px">
+        <button class="btn" id="postAdjBtn">Post adjusting entry</button>
+        <button class="btn ghost" id="cancelAdjEditBtn" style="display:none">Cancel edit</button>
+      </div>
+    </div>
+    <div class="card"><h2>Adjusting entries</h2>
+      <div class="tablewrap"><table id="adjTable"><thead><tr><th>Date</th><th>Description</th><th>Explanation</th><th>Status</th><th></th></tr></thead><tbody></tbody></table></div>
+      <div class="empty" id="adjEmpty" style="display:none">No adjusting entries yet.</div>
+    </div>
+  </section>
+
+  <section class="view" id="view-atb">
+    <div class="card">
+      <h2>Adjusted trial balance</h2>
+      <p class="sub">Unadjusted (regular entries only), Adjustments (adjusting entries only), and Adjusted (combined).</p>
+      <div class="tablewrap"><table id="atbTable"><thead>
+        <tr><th rowspan="2">Number</th><th rowspan="2">Account</th><th rowspan="2">Type</th>
+          <th colspan="2" style="text-align:center">Unadjusted</th><th colspan="2" style="text-align:center">Adjustments</th><th colspan="2" style="text-align:center">Adjusted</th></tr>
+        <tr><th style="text-align:right">Debit</th><th style="text-align:right">Credit</th><th style="text-align:right">Debit</th><th style="text-align:right">Credit</th><th style="text-align:right">Debit</th><th style="text-align:right">Credit</th></tr>
+      </thead><tbody></tbody></table></div>
+      <div class="balancebar" id="atbBalanceBar" style="margin-top:10px;padding:10px 12px;border-radius:8px;background:var(--surface-2)"></div>
+      <div id="atbMissing" style="display:none;margin-top:10px;padding:10px 12px;border-radius:8px;background:var(--bad-soft);color:var(--bad);font-size:12.5px"></div>
+    </div>
+  </section>
   <section class="view" id="view-is"><div class="card"><h2>Income Statement</h2><p class="sub">Coming in Phase 4: custom date range.</p></div></section>
   <section class="view" id="view-soe"><div class="card"><h2>Statement of Owner's Equity</h2><p class="sub">Coming in Phase 4: custom date range.</p></div></section>
 
 </main>
+<footer>Your data lives in your own Supabase project.</footer>
 </div>
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="config.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
