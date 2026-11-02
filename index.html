@@ -12,7 +12,6 @@
 <div id="authScreen">
   <div class="card">
     <h2>Sign in</h2>
-    <p class="sub">You must be signed in to use this system. </p>
     <div class="field"><label>Email</label><input id="authEmail" type="email"></div>
     <div class="field" style="margin-top:8px"><label>Password</label><input id="authPass" type="password"></div>
     <div class="errtext" id="authErr"></div>
@@ -26,7 +25,7 @@
 <div id="appScreen" style="display:none">
 <header>
   <div class="headrow">
-    <div class="brand"><div class="mark">$</div><div><h1>Ledgerline</h1><p>Accounting for your business</p></div></div>
+    <div class="brand"><div class="mark">$</div><div><p>Accounting for your business</p></div></div>
     <div class="ctl">
       <button class="btn ghost" id="exportBtn">Export to Excel</button>
       <button class="btn ghost" id="signOutBtn">Sign out</button>
@@ -87,8 +86,44 @@
   </section>
 
   <!-- PLACEHOLDERS FOR LATER PHASES -->
-  <section class="view" id="view-txn"><div class="card"><h2>Transactions</h2><p class="sub">Coming in Phase 2: transaction headers with auto status, and drill-down into related journal entries per account.</p></div></section>
-  <section class="view" id="view-je"><div class="card"><h2>Journal Entries</h2><p class="sub">Coming in Phase 2: posting the actual debit/credit lines tied to a transaction.</p></div></section>
+  <section class="view" id="view-txn">
+    <div class="card">
+      <h2>New transaction</h2>
+      <p class="sub">Create the header first, then switch to Journal Entries to post its debit/credit lines. Status becomes Recorded automatically once those lines balance.</p>
+      <div class="row">
+        <div class="field"><label>Date</label><input type="date" id="txnDate"><div class="errtext" id="err-txnDate"></div></div>
+        <div class="field" style="flex:2"><label>Description</label><input id="txnDesc" placeholder="e.g. Owner invested ₱100,000 cash in business"><div class="errtext" id="err-txnDesc"></div></div>
+      </div>
+      <div style="margin-top:10px"><button class="btn" id="createTxnBtn">Create transaction</button></div>
+    </div>
+    <div class="card"><h2>All transactions</h2>
+      <div class="tablewrap"><table id="txnTable"><thead><tr><th>Date</th><th>Description</th><th>Status</th><th></th></tr></thead><tbody></tbody></table></div>
+      <div class="empty" id="txnEmpty" style="display:none">No transactions yet.</div>
+      <div id="txnDetail" style="display:none;margin-top:12px;padding:12px;background:var(--surface-2);border-radius:8px"></div>
+    </div>
+    <div class="card"><h2>View by account</h2>
+      <p class="sub">Click an account to see every journal entry posted against it.</p>
+      <div class="row" id="accountChips"></div>
+      <div id="accountLedger" style="margin-top:14px"></div>
+    </div>
+  </section>
+  <section class="view" id="view-je">
+    <div class="card">
+      <h2>Post a journal entry</h2>
+      <p class="sub">Pick the transaction this entry belongs to, then add its debit/credit lines.</p>
+      <div class="field"><label>Transaction</label><select id="jeTxnSelect"></select><div class="errtext" id="err-jeTxnSelect"></div></div>
+      <div id="jeTxnStatus" style="margin:8px 0;font-size:13px;color:var(--ink-2)"></div>
+      <div id="jeLines"></div>
+      <button class="btn ghost" id="addJeLineBtn">+ Add line</button>
+      <div class="balancebar" id="jeBalanceBar" style="margin-top:10px;padding:10px 12px;border-radius:8px;background:var(--surface-2)"></div>
+      <div class="errtext" id="err-jeLines"></div>
+      <div style="margin-top:10px"><button class="btn" id="postJeBtn">Post entry</button></div>
+    </div>
+    <div class="card"><h2>All journal entries</h2>
+      <div class="tablewrap"><table id="jeTable"><thead><tr><th>Transaction</th><th>Account</th><th style="text-align:right">Debit</th><th style="text-align:right">Credit</th><th></th></tr></thead><tbody></tbody></table></div>
+      <div class="empty" id="jeEmpty" style="display:none">No journal entries yet.</div>
+    </div>
+  </section>
   <section class="view" id="view-tb"><div class="card"><h2>Trial Balance</h2><p class="sub">Coming in Phase 3.</p></div></section>
   <section class="view" id="view-adj"><div class="card"><h2>Adjusting Entries</h2><p class="sub">Coming in Phase 3: editable adjusting journal entries.</p></div></section>
   <section class="view" id="view-atb"><div class="card"><h2>Adjusted Trial Balance</h2><p class="sub">Coming in Phase 3: with out-of-balance highlighting.</p></div></section>
@@ -101,7 +136,6 @@
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<script src="config.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
