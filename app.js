@@ -98,7 +98,11 @@ function renderAccounts(){
   accounts.slice().sort((a,b)=>a.account_number.localeCompare(b.account_number,undefined,{numeric:true})).forEach(a=>{
     const used=accountHasEntries(a.id); const tr=document.createElement("tr");
     tr.innerHTML=`<td>${esc(a.account_number)}</td><td>${esc(a.account_name)}</td><td style="color:var(--muted)">${esc(a.description||"—")}</td>
-      <td><span class="pill">${a.account_type}</span></td><td><span class="pill">${a.normal_balance}</span></td>
+      <td><span class="pill">${a.account_type}</span></td>
+      <td><select class="nbSel" data-nb="${a.id}" style="padding:4px 8px;font-size:12px">
+        <option value="Debit" ${a.normal_balance==='Debit'?'selected':''}>Debit</option>
+        <option value="Credit" ${a.normal_balance==='Credit'?'selected':''}>Credit</option>
+      </select></td>
       <td><button class="iconbtn" data-del="${a.id}" ${used?'disabled':''} title="${used?'Used in journal entries':'Delete'}">✕</button></td>`;
     tbody.appendChild(tr);
   });
@@ -107,6 +111,14 @@ function renderAccounts(){
     const {error}=await sb.from("accounts").delete().eq("id",b.dataset.del);
     if(error){ toast("Couldn't delete: "+error.message); return; }
     accounts=accounts.filter(a=>a.id!==b.dataset.del); renderAccounts(); renderDashboard(); toast("Account deleted");
+  }));
+  tbody.querySelectorAll("[data-nb]").forEach(sel=>sel.addEventListener("change", async ()=>{
+    const id=sel.dataset.nb, value=sel.value;
+    const {data,error}=await sb.from("accounts").update({normal_balance:value}).eq("id",id).select().single();
+    if(error){ toast("Couldn't update: "+error.message); return; }
+    accounts=accounts.map(a=>a.id===id?data:a);
+    renderTrialBalance(); renderAdjustedTrialBalance(); renderDashboard();
+    toast(`Normal balance for ${data.account_name} set to ${value}`);
   }));
 }
 
