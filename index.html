@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Ledgerline — Accounting Management System</title>
+<title>Accounting Management System</title>
 <link rel="stylesheet" href="styles.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 </head>
@@ -11,8 +11,7 @@
 
 <div id="authScreen">
   <div class="card">
-    <h2>Sign in to Ledgerline</h2>
-    <p class="sub">You must be signed in to use this system — your data is private to your account.</p>
+    <h2>Sign in</h2>
     <div class="field"><label>Email</label><input id="authEmail" type="email"></div>
     <div class="field" style="margin-top:8px"><label>Password</label><input id="authPass" type="password"></div>
     <div class="errtext" id="authErr"></div>
@@ -26,7 +25,7 @@
 <div id="appScreen" style="display:none">
 <header>
   <div class="headrow">
-    <div class="brand"><div class="mark">$</div><div><h1>Ledgerline</h1><p>Accounting for your business</p></div></div>
+    <div class="brand"><div class="mark">$</div><div><p>Accounting for your business</p></div></div>
     <div class="ctl">
       <button class="btn ghost" id="exportBtn">Export to Excel</button>
       <button class="btn ghost" id="signOutBtn">Sign out</button>
@@ -171,16 +170,35 @@
       <div id="atbMissing" style="display:none;margin-top:10px;padding:10px 12px;border-radius:8px;background:var(--bad-soft);color:var(--bad);font-size:12.5px"></div>
     </div>
   </section>
-  <section class="view" id="view-is"><div class="card"><h2>Income Statement</h2><p class="sub">Coming in Phase 4: custom date range.</p></div></section>
-  <section class="view" id="view-soe"><div class="card"><h2>Statement of Owner's Equity</h2><p class="sub">Coming in Phase 4: custom date range.</p></div></section>
+  <section class="view" id="view-is">
+    <div class="card">
+      <h2>Income statement</h2>
+      <p class="sub">Includes both regular and adjusting entries for the period you choose.</p>
+      <div class="row">
+        <div class="field"><label>From</label><input type="date" id="isStart"></div>
+        <div class="field"><label>To</label><input type="date" id="isEnd"></div>
+      </div>
+      <div id="isOutput" style="margin-top:14px"></div>
+    </div>
+  </section>
+
+  <section class="view" id="view-soe">
+    <div class="card">
+      <h2>Statement of owner's equity</h2>
+      <p class="sub">Equity accounts with "drawing" in the name are treated as owner withdrawals; all other equity accounts count as capital.</p>
+      <div class="row">
+        <div class="field"><label>From</label><input type="date" id="soeStart"></div>
+        <div class="field"><label>To</label><input type="date" id="soeEnd"></div>
+      </div>
+      <div id="soeOutput" style="margin-top:14px"></div>
+    </div>
+  </section>
 
 </main>
-<footer>Your data lives in your own Supabase project.</footer>
 </div>
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<script src="config.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
