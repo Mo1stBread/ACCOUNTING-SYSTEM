@@ -5,17 +5,12 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 (function(){
 "use strict";
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-let user=null, myRow=null, viewingId=null, viewingOwn=true, channel=null;
-let state = { accounts:[], txns:[], fyEnabled:false, fyStartMonth:1, currency:"PHP" };
-const currencySymbols={PHP:"₱",USD:"$"};
-const monthNames=["January","February","March","April","May","June","July","August","September","October","November","December"];
+let user=null;
+let accounts=[], transactions=[], journalEntries=[];
 
 function normalSide(t){return (t==="Asset"||t==="Expense")?"Debit":"Credit";}
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
-function money(n){const s=currencySymbols[state.currency]||"$";return (n<0?"-"+s:s)+Math.abs(n).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});}
-function moneyCell(n){const s=currencySymbols[state.currency]||"$";const v=(n<0?"-":"")+Math.abs(n).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});return `<span class="amt"><span class="sym">${s}</span><span class="val">${v}</span></span>`;}
-function fmtDate(iso){return new Date(iso+"T00:00:00").toLocaleDateString(undefined,{year:"numeric",month:"short",day:"numeric"});}
-function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7);}
+function money(n){return "₱"+Number(n||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});}
 function toast(m){const t=document.getElementById("toast");t.textContent=m;t.classList.add("show");setTimeout(()=>t.classList.remove("show"),2200);}
 function clearErr(id){document.getElementById("err-"+id).textContent="";document.getElementById(id).classList.remove("err");}
 function setErr(id,m){document.getElementById("err-"+id).textContent=m;document.getElementById(id).classList.add("err");}
@@ -37,284 +32,143 @@ document.getElementById("signOutBtn").addEventListener("click", async ()=>{ awai
 sb.auth.onAuthStateChange((event, session)=>{
   user = session ? session.user : null;
   if(user){ document.getElementById("authScreen").style.display="none"; document.getElementById("appScreen").style.display="block"; boot(); }
-  else{ document.getElementById("authScreen").style.display="block"; document.getElementById("appScreen").style.display="none"; if(channel) sb.removeChannel(channel); }
+  else{ document.getElementById("authScreen").style.display="block"; document.getElementById("appScreen").style.display="none"; }
 });
 
 // ---------- Data layer ----------
-const params=new URLSearchParams(location.search);
-const sharedParam=params.get("ledger");
-
 async function boot(){
-  if(sharedParam){
-    viewingId=sharedParam; viewingOwn=false;
-    const {data,error}=await sb.from("ledgers").select("*").eq("id",sharedParam).single();
-    if(error || !data || !data.is_shared){ toast("That shared ledger isn't available."); return openOwn(); }
-    myRow=data; viewingOwn = data.owner_id===user.id;
-    state=Object.assign(state, data.data||{});
-  } else {
-    await openOwn();
-  }
-  applyStateToUI(); subscribeRealtime();
+  await loadAll();
+  renderAccounts();
+  renderDashboard();
 }
-async function openOwn(){
-  viewingOwn=true;
-  let {data}=await sb.from("ledgers").select("*").eq("owner_id",user.id).maybeSingle();
-  if(!data){
-    const seed={accounts:[],txns:[],fyEnabled:false,fyStartMonth:1,currency:"PHP"};
-    const {data:created,error}=await sb.from("ledgers").insert({owner_id:user.id,data:seed,is_shared:false}).select().single();
-    if(error){ toast("Couldn't create your ledger: "+error.message); return; }
-    data=created;
-  }
-  myRow=data; viewingId=data.id; state=Object.assign(state,data.data||{});
+async function loadAll(){
+  const [a,t,j]=await Promise.all([
+    sb.from("accounts").select("*").eq("owner_id",user.id),
+    sb.from("transactions").select("*").eq("owner_id",user.id),
+    sb.from("journal_entries").select("*").eq("owner_id",user.id)
+  ]);
+  if(a.error) toast("Couldn't load accounts: "+a.error.message);
+  if(t.error) toast("Couldn't load transactions: "+t.error.message);
+  if(j.error) toast("Couldn't load journal entries: "+j.error.message);
+  accounts=a.data||[]; transactions=t.data||[]; journalEntries=j.data||[];
 }
-async function persist(){
-  if(!viewingOwn && !(myRow && myRow.is_shared)) return; // read-only viewer of someone else's unshared row (shouldn't happen)
-  const {error}=await sb.from("ledgers").update({data:state, updated_at:new Date().toISOString()}).eq("id",viewingId);
-  if(error) toast("Sync failed: "+error.message);
-}
-function subscribeRealtime(){
-  if(channel) sb.removeChannel(channel);
-  channel=sb.channel("ledger-"+viewingId).on("postgres_changes",{event:"UPDATE",schema:"public",table:"ledgers",filter:"id=eq."+viewingId},
-    payload=>{ state=Object.assign({accounts:[],txns:[],fyEnabled:false,fyStartMonth:1,currency:"PHP"}, payload.new.data||{}); myRow=payload.new; applyStateToUI(); }
-  ).subscribe();
-}
-function applyStateToUI(){
-  document.getElementById("currencySel").value=state.currency||"PHP";
-  document.getElementById("fyToggle").checked=!!state.fyEnabled;
-  document.getElementById("fyToggle").disabled=!viewingOwn;
-  fyMonthSel.value=state.fyStartMonth||1;
-  fyMonthSel.style.display=state.fyEnabled?"inline-block":"none";
-  updateFyLabel();
-  const sc=document.getElementById("shareToggle");
-  sc.checked = !!(myRow && myRow.is_shared);
-  sc.disabled = !viewingOwn;
-  updateShareLabel();
-  document.getElementById("copyLinkBtn").style.display = (myRow && myRow.is_shared) ? "inline-block" : "none";
-  document.getElementById("viewOnlyBanner").style.display = viewingOwn ? "none" : "block";
-  ["addAccountBtn","postTxnBtn","addLineBtn","currencySel","coaCode","coaName","coaType","txnDate","txnDesc","txnComment",
-   "postAdjBtn","addAdjLineBtn","adjDate","adjDesc","adjComment"].forEach(id=>{
-    const el=document.getElementById(id); if(el) el.disabled=!viewingOwn;
-  });
-  renderAccounts(); refreshAccountDropdowns(); renderTransactions(); renderAdjustments(); renderTrialBalance();
-}
-function updateShareLabel(){
-  document.getElementById("shareLabel").textContent = (myRow && myRow.is_shared) ? "Shared (anyone with the link)" : "Private (only you)";
-}
-document.getElementById("shareToggle").addEventListener("change", async e=>{
-  if(!viewingOwn) return;
-  const {data,error}=await sb.from("ledgers").update({is_shared:e.target.checked}).eq("id",viewingId).select().single();
-  if(error){ toast("Couldn't update sharing: "+error.message); return; }
-  myRow=data; updateShareLabel();
-  document.getElementById("copyLinkBtn").style.display = myRow.is_shared ? "inline-block":"none";
-  toast(myRow.is_shared ? "Now sharing this ledger" : "Back to private");
-});
-document.getElementById("copyLinkBtn").addEventListener("click", ()=>{
-  const link=location.origin+location.pathname+"?ledger="+viewingId;
-  navigator.clipboard.writeText(link).then(()=>toast("Share link copied")).catch(()=>toast(link));
-});
 
 // ---------- Tabs ----------
 document.querySelectorAll("nav .tab").forEach(btn=>btn.addEventListener("click",()=>{
   document.querySelectorAll("nav .tab").forEach(b=>b.classList.remove("active"));
   document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));
   btn.classList.add("active"); document.getElementById("view-"+btn.dataset.view).classList.add("active");
+  if(btn.dataset.view==="dash") renderDashboard();
 }));
-document.getElementById("currencySel").addEventListener("change", e=>{ state.currency=e.target.value; persist(); renderTransactions(); renderAdjustments(); renderTrialBalance(); updateBalanceBar("txnLines"); updateBalanceBar("adjLines"); });
-
-// ---------- Fiscal year ----------
-const fyMonthSel=document.getElementById("fyMonth");
-monthNames.forEach((m,i)=>{ const o=document.createElement("option"); o.value=i+1; o.textContent="Starts "+m; fyMonthSel.appendChild(o); });
-function updateFyLabel(){
-  const lbl=document.getElementById("fyLabel");
-  if(!state.fyEnabled){ lbl.textContent="Calendar year (Jan–Dec)"; }
-  else{ const endIdx=(state.fyStartMonth+10)%12; lbl.textContent="Fiscal year ("+monthNames[state.fyStartMonth-1].slice(0,3)+"–"+monthNames[endIdx].slice(0,3)+")"; }
-}
-document.getElementById("fyToggle").addEventListener("change", e=>{
-  if(!viewingOwn){ e.target.checked=!e.target.checked; return; }
-  state.fyEnabled=e.target.checked; fyMonthSel.style.display=state.fyEnabled?"inline-block":"none";
-  updateFyLabel(); persist(); renderTrialBalance();
-});
-fyMonthSel.addEventListener("change", e=>{
-  state.fyStartMonth=parseInt(e.target.value,10); updateFyLabel(); persist(); renderTrialBalance();
-});
 
 // ---------- Chart of Accounts ----------
-document.getElementById("addAccountBtn").addEventListener("click", ()=>{
-  const codeEl=document.getElementById("coaCode"), nameEl=document.getElementById("coaName"), typeEl=document.getElementById("coaType");
-  ["coaCode","coaName"].forEach(clearErr);
-  const code=codeEl.value.trim(), name=nameEl.value.trim(), type=typeEl.value; let bad=false;
-  if(!code){setErr("coaCode","Account code is required.");bad=true;}
-  else if(state.accounts.some(a=>a.code===code)){setErr("coaCode","That code is already used.");bad=true;}
-  if(!name){setErr("coaName","Account name is required.");bad=true;}
+document.getElementById("addAccountBtn").addEventListener("click", async ()=>{
+  const numEl=document.getElementById("coaNumber"), nameEl=document.getElementById("coaName"),
+        typeEl=document.getElementById("coaType"), descEl=document.getElementById("coaDesc");
+  ["coaNumber","coaName"].forEach(clearErr);
+  const account_number=numEl.value.trim(), account_name=nameEl.value.trim(), account_type=typeEl.value;
+  let bad=false;
+  if(!account_number){ setErr("coaNumber","Account number is required."); bad=true; }
+  else if(accounts.some(a=>a.account_number===account_number)){ setErr("coaNumber","That number is already used."); bad=true; }
+  if(!account_name){ setErr("coaName","Account name is required."); bad=true; }
   if(bad) return;
-  state.accounts.push({code,name,type,normalBalance:normalSide(type)});
-  persist(); codeEl.value=""; nameEl.value=""; renderAccounts(); refreshAccountDropdowns(); toast("Account added");
+  const row={owner_id:user.id, account_number, account_name, description:descEl.value.trim()||null, account_type, normal_balance:normalSide(account_type)};
+  const {data,error}=await sb.from("accounts").insert(row).select().single();
+  if(error){ toast("Couldn't add account: "+error.message); return; }
+  accounts.push(data); numEl.value=""; nameEl.value=""; descEl.value="";
+  renderAccounts(); renderDashboard(); toast("Account added");
 });
-function accountHasTxns(code){ return state.txns.some(t=>t.lines.some(l=>l.account===code)); }
+function accountHasEntries(id){ return journalEntries.some(j=>j.account_id===id); }
 function renderAccounts(){
   const tbody=document.querySelector("#coaTable tbody"); tbody.innerHTML="";
-  document.getElementById("coaEmpty").style.display = state.accounts.length?"none":"block";
-  state.accounts.slice().sort((a,b)=>a.code.localeCompare(b.code,undefined,{numeric:true})).forEach(a=>{
-    const used=accountHasTxns(a.code); const tr=document.createElement("tr");
-    tr.innerHTML=`<td>${esc(a.code)}</td><td>${esc(a.name)}</td><td><span class="pill">${a.type}</span></td>
-      <td><span class="pill ${a.normalBalance==='Debit'?'debit':'credit'}">${a.normalBalance}</span></td>
-      <td><button class="iconbtn" data-del="${esc(a.code)}" ${(used||!viewingOwn)?'disabled':''}>✕</button></td>`;
+  document.getElementById("coaEmpty").style.display = accounts.length?"none":"block";
+  accounts.slice().sort((a,b)=>a.account_number.localeCompare(b.account_number,undefined,{numeric:true})).forEach(a=>{
+    const used=accountHasEntries(a.id); const tr=document.createElement("tr");
+    tr.innerHTML=`<td>${esc(a.account_number)}</td><td>${esc(a.account_name)}</td><td style="color:var(--muted)">${esc(a.description||"—")}</td>
+      <td><span class="pill">${a.account_type}</span></td><td><span class="pill">${a.normal_balance}</span></td>
+      <td><button class="iconbtn" data-del="${a.id}" ${used?'disabled':''} title="${used?'Used in journal entries':'Delete'}">✕</button></td>`;
     tbody.appendChild(tr);
   });
-  tbody.querySelectorAll("[data-del]").forEach(b=>b.addEventListener("click",()=>confirmAction(`Delete account ${b.dataset.del}?`,()=>{
-    state.accounts=state.accounts.filter(a=>a.code!==b.dataset.del); persist(); renderAccounts(); refreshAccountDropdowns(); toast("Account deleted");
-  })));
-}
-
-// ---------- Transactions ----------
-function addLine(wrapId){
-  const linesWrap=document.getElementById(wrapId);
-  const row=document.createElement("div"); row.className="linegrid";
-  const sel=document.createElement("select"); sel.className="lineAcct"; row.appendChild(sel);
-  const d=document.createElement("input"); d.type="text"; d.inputMode="decimal"; d.placeholder="0.00"; d.className="lineDebit num";
-  const c=document.createElement("input"); c.type="text"; c.inputMode="decimal"; c.placeholder="0.00"; c.className="lineCredit num";
-  row.appendChild(d); row.appendChild(c);
-  const rm=document.createElement("button"); rm.className="iconbtn"; rm.textContent="✕";
-  rm.addEventListener("click",()=>{ if(linesWrap.children.length>2){row.remove();updateBalanceBar(wrapId);} else toast("An entry needs at least two lines"); });
-  row.appendChild(rm);
-  [d,c].forEach(inp=>inp.addEventListener("input",()=>{ if(inp===d&&d.value)c.value=""; if(inp===c&&c.value)d.value=""; updateBalanceBar(wrapId); }));
-  linesWrap.appendChild(row); refreshLineDropdown(sel);
-}
-function refreshLineDropdown(sel){
-  const cur=sel.value;
-  sel.innerHTML='<option value="">Select account…</option>'+state.accounts.slice().sort((a,b)=>a.code.localeCompare(b.code,undefined,{numeric:true}))
-    .map(a=>`<option value="${esc(a.code)}">${esc(a.code)} — ${esc(a.name)}</option>`).join("");
-  if(cur) sel.value=cur;
-}
-function refreshAccountDropdowns(){ document.querySelectorAll(".lineAcct").forEach(refreshLineDropdown); }
-document.getElementById("addLineBtn").addEventListener("click", ()=>addLine("txnLines"));
-document.getElementById("addAdjLineBtn").addEventListener("click", ()=>addLine("adjLines"));
-function lineAmounts(wrapId){
-  let debit=0,credit=0;
-  document.querySelectorAll("#"+wrapId+" .linegrid").forEach(r=>{ debit+=parseFloat(r.querySelector(".lineDebit").value)||0; credit+=parseFloat(r.querySelector(".lineCredit").value)||0; });
-  return {debit,credit};
-}
-function updateBalanceBar(wrapId){
-  const barId = wrapId==="adjLines" ? "adjBalanceBar" : "balanceBar";
-  const {debit,credit}=lineAmounts(wrapId); const bar=document.getElementById(barId); const diff=Math.round((debit-credit)*100)/100;
-  bar.textContent=`Debits ${money(debit)} · Credits ${money(credit)}`+(diff!==0?` · Out of balance by ${money(Math.abs(diff))}`:" · Balanced");
-  bar.className="balancebar "+(diff===0&&debit>0?"ok":(diff!==0?"bad":""));
-}
-function postEntry(opts){
-  // opts: {dateId, descId, wrapId, errLinesId, commentId, requireComment, isAdjustment, postedMsg, entryNoun}
-  [opts.dateId,opts.descId].forEach(clearErr); document.getElementById(opts.errLinesId).textContent="";
-  const dateEl=document.getElementById(opts.dateId), descEl=document.getElementById(opts.descId); let bad=false;
-  if(!dateEl.value){setErr(opts.dateId,"Pick a date.");bad=true;}
-  if(!descEl.value.trim()){setErr(opts.descId,"Describe this "+opts.entryNoun+".");bad=true;}
-  const commentEl=document.getElementById(opts.commentId);
-  if(opts.requireComment && !commentEl.value.trim()){ document.getElementById(opts.errLinesId).textContent="Adjusting entries need a comment explaining why."; bad=true; }
-  const lines=[];
-  document.querySelectorAll("#"+opts.wrapId+" .linegrid").forEach(r=>{
-    const acct=r.querySelector(".lineAcct").value, dv=parseFloat(r.querySelector(".lineDebit").value)||0, cv=parseFloat(r.querySelector(".lineCredit").value)||0;
-    if(acct&&(dv>0||cv>0)) lines.push({account:acct,debit:dv,credit:cv});
-  });
-  if(lines.length<2){ document.getElementById(opts.errLinesId).textContent="Add at least two complete lines."; bad=true; }
-  const {debit,credit}=lineAmounts(opts.wrapId);
-  if(Math.round((debit-credit)*100)!==0){ document.getElementById(opts.errLinesId).textContent="Total debits must equal total credits."; bad=true; }
-  if(debit===0){ document.getElementById(opts.errLinesId).textContent="Enter at least one amount greater than zero."; bad=true; }
-  if(bad) return;
-  state.txns.push({id:uid(),date:dateEl.value,description:descEl.value.trim(),comment:commentEl.value.trim(),lines,isAdjustment:!!opts.isAdjustment});
-  persist(); descEl.value=""; commentEl.value="";
-  document.getElementById(opts.wrapId).innerHTML=""; addLine(opts.wrapId); addLine(opts.wrapId); updateBalanceBar(opts.wrapId);
-  renderAccounts(); renderTransactions(); renderAdjustments(); toast(opts.postedMsg);
-}
-document.getElementById("postTxnBtn").addEventListener("click", ()=>postEntry({
-  dateId:"txnDate",descId:"txnDesc",wrapId:"txnLines",errLinesId:"err-txnLines",commentId:"txnComment",
-  requireComment:false,isAdjustment:false,postedMsg:"Transaction posted",entryNoun:"transaction"
-}));
-document.getElementById("postAdjBtn").addEventListener("click", ()=>postEntry({
-  dateId:"adjDate",descId:"adjDesc",wrapId:"adjLines",errLinesId:"err-adjLines",commentId:"adjComment",
-  requireComment:true,isAdjustment:true,postedMsg:"Adjusting entry posted",entryNoun:"adjustment"
-}));
-function renderEntryTable(tableId,emptyId,predicate){
-  const tbody=document.querySelector("#"+tableId+" tbody"); tbody.innerHTML="";
-  const rows=state.txns.filter(predicate);
-  document.getElementById(emptyId).style.display=rows.length?"none":"block";
-  rows.slice().sort((a,b)=>b.date.localeCompare(a.date)).forEach(t=>{
-    const total=t.lines.reduce((s,l)=>s+l.debit,0);
-    const linesTxt=t.lines.map(l=>{const a=state.accounts.find(x=>x.code===l.account);const nm=a?a.name:l.account;
-      return l.debit>0?`${nm} (Dr ${money(l.debit)})`:`${nm} (Cr ${money(l.credit)})`;}).join("<br>");
-    const tr=document.createElement("tr");
-    tr.innerHTML=`<td>${fmtDate(t.date)}</td><td>${esc(t.description)}</td><td style="font-size:12px">${linesTxt}</td>
-      <td style="font-size:12px;color:var(--ink-2)">${esc(t.comment||"—")}</td><td class="num">${moneyCell(total)}</td>
-      <td><button class="iconbtn" data-del="${t.id}" ${!viewingOwn?'disabled':''}>✕</button></td>`;
-    tbody.appendChild(tr);
-  });
-  tbody.querySelectorAll("[data-del]").forEach(b=>b.addEventListener("click",()=>confirmAction("Delete this entry?",()=>{
-    state.txns=state.txns.filter(t=>t.id!==b.dataset.del); persist(); renderAccounts(); renderTransactions(); renderAdjustments(); toast("Entry deleted");
-  })));
-}
-function renderTransactions(){ renderEntryTable("txnTable","txnEmpty", t=>!t.isAdjustment); }
-function renderAdjustments(){ renderEntryTable("adjTable","adjEmpty", t=>!!t.isAdjustment); }
-
-// ---------- Trial Balance ----------
-function netToCols(d,c,normalBalance){
-  const net=d-c; let debitCol=0,creditCol=0;
-  if(normalBalance==="Debit"){ if(net>=0)debitCol=net; else creditCol=-net; } else { if(-net>=0)creditCol=-net; else debitCol=net; }
-  return {debitCol,creditCol};
-}
-function renderTrialBalance(){
-  const tbody=document.querySelector("#tbTable tbody"); tbody.innerHTML="";
-  let totU_d=0,totU_c=0,totA_d=0,totA_c=0,totF_d=0,totF_c=0;
-  state.accounts.slice().sort((a,b)=>a.code.localeCompare(b.code,undefined,{numeric:true})).forEach(a=>{
-    let ud=0,uc=0,ad=0,ac=0;
-    state.txns.forEach(t=>t.lines.forEach(l=>{
-      if(l.account!==a.code) return;
-      if(t.isAdjustment){ ad+=l.debit; ac+=l.credit; } else { ud+=l.debit; uc+=l.credit; }
-    }));
-    if(ud===0&&uc===0&&ad===0&&ac===0) return;
-    const U=netToCols(ud,uc,a.normalBalance);
-    const A=netToCols(ad,ac,a.normalBalance);
-    const F=netToCols(ud+ad,uc+ac,a.normalBalance);
-    totU_d+=U.debitCol; totU_c+=U.creditCol; totA_d+=A.debitCol; totA_c+=A.creditCol; totF_d+=F.debitCol; totF_c+=F.creditCol;
-    const tr=document.createElement("tr");
-    tr.innerHTML=`<td>${esc(a.code)}</td><td>${esc(a.name)}</td><td><span class="pill">${a.type}</span></td>
-      <td class="num">${U.debitCol!==0?moneyCell(U.debitCol):"—"}</td><td class="num">${U.creditCol!==0?moneyCell(U.creditCol):"—"}</td>
-      <td class="num">${A.debitCol!==0?moneyCell(A.debitCol):"—"}</td><td class="num">${A.creditCol!==0?moneyCell(A.creditCol):"—"}</td>
-      <td class="num">${F.debitCol!==0?moneyCell(F.debitCol):"—"}</td><td class="num">${F.creditCol!==0?moneyCell(F.creditCol):"—"}</td>`;
-    tbody.appendChild(tr);
-  });
-  if(!tbody.children.length) tbody.innerHTML='<tr><td colspan="9" class="empty">Post a transaction to see your trial balance.</td></tr>';
-  const bar=document.getElementById("tbBalanceBar"); const diff=Math.round((totF_d-totF_c)*100)/100;
-  bar.textContent=`Unadjusted ${money(totU_d)} / ${money(totU_c)} · Adjustments ${money(totA_d)} / ${money(totA_c)} · Adjusted ${money(totF_d)} / ${money(totF_c)}`+(diff===0?" · Balanced ✓":` · Out of balance by ${money(Math.abs(diff))}`);
-  bar.className="balancebar "+(diff===0?"ok":"bad");
-  const lbl=document.getElementById("tbPeriodLabel");
-  if(lbl) lbl.textContent = "Recalculates automatically from every posted transaction and adjusting entry. " +
-    (state.fyEnabled ? "Using your fiscal year (starts "+monthNames[state.fyStartMonth-1]+")." : "Using the calendar year (Jan–Dec).");
-
-  // Flag any line whose account code no longer matches anything in the Chart of Accounts,
-  // so missing amounts are visible instead of silently vanishing from the totals above.
-  const validCodes=new Set(state.accounts.map(a=>a.code));
-  const missingCodes=new Set(); let missingAmt=0;
-  state.txns.forEach(t=>t.lines.forEach(l=>{
-    if(!validCodes.has(l.account)){ missingCodes.add(l.account||"(blank)"); missingAmt+=l.debit+l.credit; }
+  tbody.querySelectorAll("[data-del]").forEach(b=>b.addEventListener("click", async ()=>{
+    if(!confirm("Delete this account?")) return;
+    const {error}=await sb.from("accounts").delete().eq("id",b.dataset.del);
+    if(error){ toast("Couldn't delete: "+error.message); return; }
+    accounts=accounts.filter(a=>a.id!==b.dataset.del); renderAccounts(); renderDashboard(); toast("Account deleted");
   }));
-  let warnEl=document.getElementById("tbMissingWarn");
-  if(!warnEl){
-    warnEl=document.createElement("div"); warnEl.id="tbMissingWarn";
-    warnEl.style.cssText="margin-top:10px;padding:10px 12px;border-radius:8px;background:var(--bad-soft);color:var(--bad);font-size:12.5px;";
-    bar.insertAdjacentElement("afterend", warnEl);
-  }
-  if(missingCodes.size){
-    warnEl.style.display="block";
-    warnEl.textContent = `⚠ ${money(missingAmt/2)} total from entries referencing an account code that no longer exists in your Chart of Accounts (missing code${missingCodes.size>1?'s':''}: ${[...missingCodes].join(", ")}). Add that account back with the same code, or edit those entries, to include them in the trial balance.`;
+}
+
+// ---------- Dashboard ----------
+function txnStatus(t){
+  const lines=journalEntries.filter(j=>j.transaction_id===t.id);
+  if(!lines.length) return "Pending";
+  const d=lines.reduce((s,l)=>s+Number(l.debit),0), c=lines.reduce((s,l)=>s+Number(l.credit),0);
+  return (d>0 && Math.round((d-c)*100)===0) ? "Recorded" : "Pending";
+}
+function renderDashboard(){
+  const total=transactions.length;
+  const recorded=transactions.filter(t=>txnStatus(t)==="Recorded").length;
+  const pending=total-recorded;
+  const original=transactions.filter(t=>!t.is_adjustment).length;
+  const adjusting=transactions.filter(t=>!!t.is_adjustment).length;
+
+  document.getElementById("statTotal").textContent=total;
+  document.getElementById("statRecorded").textContent=recorded;
+  document.getElementById("statPending").textContent=pending;
+  document.getElementById("statOriginal").textContent=original;
+  document.getElementById("statAdjusting").textContent=adjusting;
+
+  // Trial balance status: net all recorded journal entries by account's normal balance, check totals match
+  let totD=0, totC=0;
+  accounts.forEach(a=>{
+    const lines=journalEntries.filter(j=>j.account_id===a.id);
+    const d=lines.reduce((s,l)=>s+Number(l.debit),0), c=lines.reduce((s,l)=>s+Number(l.credit),0);
+    const net=d-c;
+    if(a.normal_balance==="Debit"){ if(net>=0) totD+=net; else totC+=-net; } else { if(-net>=0) totC+=-net; else totD+=net; }
+  });
+  const balanced = Math.round((totD-totC)*100)===0;
+  const tbEl=document.getElementById("statTbStatus");
+  tbEl.textContent = journalEntries.length ? (balanced?"Balanced ✓":"Out of balance") : "No entries yet";
+  tbEl.className = "statval "+(journalEntries.length ? (balanced?"good":"warn") : "");
+
+  // Net income: Revenue (credit-normal) minus Expense (debit-normal)
+  let revenue=0, expense=0;
+  accounts.forEach(a=>{
+    const lines=journalEntries.filter(j=>j.account_id===a.id);
+    const d=lines.reduce((s,l)=>s+Number(l.debit),0), c=lines.reduce((s,l)=>s+Number(l.credit),0);
+    if(a.account_type==="Revenue") revenue += (c-d);
+    if(a.account_type==="Expense") expense += (d-c);
+  });
+  document.getElementById("statNetIncome").textContent = money(revenue-expense);
+
+  // Donut: recorded vs pending share
+  const donut=document.getElementById("donutChart"), legend=document.getElementById("donutLegend");
+  if(total===0){
+    donut.style.background="conic-gradient(var(--border) 0deg 360deg)";
+    donut.setAttribute("data-center","No data yet");
+    legend.innerHTML='<span style="color:var(--muted)">Add transactions to see this chart.</span>';
   } else {
-    warnEl.style.display="none";
+    const pct=Math.round((recorded/total)*100);
+    const deg=(recorded/total)*360;
+    donut.style.background=`conic-gradient(var(--good) 0deg ${deg}deg, var(--warn) ${deg}deg 360deg)`;
+    donut.setAttribute("data-center", pct+"% recorded");
+    legend.innerHTML=`<div><span class="sw" style="background:var(--good)"></span>Recorded — ${recorded} (${pct}%)</div>
+      <div><span class="sw" style="background:var(--warn)"></span>Pending — ${pending} (${100-pct}%)</div>`;
   }
 }
 
-// ---------- Confirm modal ----------
-let pendingAction=null;
-function confirmAction(text,fn){ document.getElementById("confirmText").textContent=text; pendingAction=fn; document.getElementById("confirmBg").classList.add("show"); }
-document.getElementById("confirmNo").addEventListener("click",()=>document.getElementById("confirmBg").classList.remove("show"));
-document.getElementById("confirmYes").addEventListener("click",()=>{ if(pendingAction) pendingAction(); document.getElementById("confirmBg").classList.remove("show"); });
-  
-document.getElementById("txnDate").value=new Date().toISOString().slice(0,10);
-addLine("txnLines"); addLine("txnLines"); updateBalanceBar("txnLines");
-addLine("adjLines"); addLine("adjLines"); updateBalanceBar("adjLines");
+// ---------- Export to Excel ----------
+document.getElementById("exportBtn").addEventListener("click", ()=>{
+  const wb=XLSX.utils.book_new();
+  const coaRows=accounts.map(a=>({"Account Number":a.account_number,"Account Name":a.account_name,"Description":a.description||"","Type":a.account_type,"Normal Balance":a.normal_balance}));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(coaRows), "Chart of Accounts");
+  const txnRows=transactions.map(t=>({"Date":t.date,"Description":t.description,"Status":txnStatus(t),"Type":t.is_adjustment?"Adjusting":"Regular","Comment":t.comment||""}));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(txnRows), "Transactions");
+  const jeRows=journalEntries.map(j=>{
+    const a=accounts.find(x=>x.id===j.account_id);
+    return {"Transaction ID":j.transaction_id,"Account Number":a?a.account_number:"","Account Name":a?a.account_name:"","Debit":j.debit,"Credit":j.credit};
+  });
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(jeRows), "Journal Entries");
+  XLSX.writeFile(wb, "ledgerline-export.xlsx");
+  toast("Exported to Excel");
+});
 })();
