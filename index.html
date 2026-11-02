@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Accounting Management System</title>
+<title>Ledgerline — Accounting Management System</title>
 <link rel="stylesheet" href="styles.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 </head>
@@ -25,7 +25,7 @@
 <div id="appScreen" style="display:none">
 <header>
   <div class="headrow">
-    <div class="brand"><div class="mark">$</div><div><p>Accounting for your business</p></div></div>
+    <div class="brand"><div class="mark">$</div><div><h1></h1><p>Accounting for your business</p></div></div>
     <div class="ctl">
       <button class="btn ghost" id="exportBtn">Export to Excel</button>
       <button class="btn ghost" id="signOutBtn">Sign out</button>
@@ -131,7 +131,6 @@
   <section class="view" id="view-soe"><div class="card"><h2>Statement of Owner's Equity</h2><p class="sub">Coming in Phase 4: custom date range.</p></div></section>
 
 </main>
-<footer>Your data lives in your own Supabase project.</footer>
 </div>
 <div class="toast" id="toast"></div>
 
