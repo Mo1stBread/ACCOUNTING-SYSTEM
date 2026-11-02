@@ -41,8 +41,12 @@ async function boot(){
   renderAccounts();
   renderTransactionsTab();
   populateJeTxnSelect();
-  document.getElementById("jeLines").innerHTML=""; addJeLine(); addJeLine(); updateJeBalanceBar();
+  document.getElementById("jeLines").innerHTML=""; addLineRow("jeLines","jeBalanceBar"); addLineRow("jeLines","jeBalanceBar"); updateLineBalanceBar("jeLines","jeBalanceBar");
   renderJeTable();
+  renderTrialBalance();
+  resetAdjForm();
+  renderAdjTable();
+  renderAdjustedTrialBalance();
   renderDashboard();
   document.getElementById("txnDate").value=new Date().toISOString().slice(0,10);
 }
@@ -241,27 +245,27 @@ function onJeTxnChange(){
   const t=transactions.find(x=>x.id===id);
   document.getElementById("jeTxnStatus").textContent = t ? "Current status: "+txnStatus(t) : "";
 }
-function addJeLine(){
-  const wrap=document.getElementById("jeLines");
+function addLineRow(wrapId,barId){
+  const wrap=document.getElementById(wrapId);
   const row=document.createElement("div"); row.className="linegrid"; row.style.cssText="display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:8px;margin-bottom:6px;";
-  const sel=document.createElement("select"); sel.className="jeLineAcct";
+  const sel=document.createElement("select"); sel.className="lineAcctSel";
   sel.innerHTML='<option value="">Select account…</option>'+accounts.slice().sort((a,b)=>a.account_number.localeCompare(b.account_number,undefined,{numeric:true}))
     .map(a=>`<option value="${a.id}">${esc(a.account_number)} — ${esc(a.account_name)}</option>`).join("");
-  const d=document.createElement("input"); d.type="text"; d.inputMode="decimal"; d.placeholder="0.00"; d.className="jeLineDebit"; d.style.textAlign="right";
-  const c=document.createElement("input"); c.type="text"; c.inputMode="decimal"; c.placeholder="0.00"; c.className="jeLineCredit"; c.style.textAlign="right";
+  const d=document.createElement("input"); d.type="text"; d.inputMode="decimal"; d.placeholder="0.00"; d.className="lineDebitInp"; d.style.textAlign="right";
+  const c=document.createElement("input"); c.type="text"; c.inputMode="decimal"; c.placeholder="0.00"; c.className="lineCreditInp"; c.style.textAlign="right";
   const rm=document.createElement("button"); rm.className="iconbtn"; rm.textContent="✕";
-  rm.addEventListener("click",()=>{ if(wrap.children.length>2){row.remove();updateJeBalanceBar();} else toast("An entry needs at least two lines"); });
-  [d,c].forEach(inp=>inp.addEventListener("input",()=>{ if(inp===d&&d.value)c.value=""; if(inp===c&&c.value)d.value=""; updateJeBalanceBar(); }));
+  rm.addEventListener("click",()=>{ if(wrap.children.length>2){row.remove();updateLineBalanceBar(wrapId,barId);} else toast("An entry needs at least two lines"); });
+  [d,c].forEach(inp=>inp.addEventListener("input",()=>{ if(inp===d&&d.value)c.value=""; if(inp===c&&c.value)d.value=""; updateLineBalanceBar(wrapId,barId); }));
   row.append(sel,d,c,rm); wrap.appendChild(row);
 }
-document.getElementById("addJeLineBtn").addEventListener("click", addJeLine);
-function jeLineAmounts(){
+document.getElementById("addJeLineBtn").addEventListener("click", ()=>addLineRow("jeLines","jeBalanceBar"));
+function lineRowAmounts(wrapId){
   let debit=0,credit=0;
-  document.querySelectorAll("#jeLines > div").forEach(r=>{ debit+=parseFloat(r.querySelector(".jeLineDebit").value)||0; credit+=parseFloat(r.querySelector(".jeLineCredit").value)||0; });
+  document.querySelectorAll("#"+wrapId+" > div").forEach(r=>{ debit+=parseFloat(r.querySelector(".lineDebitInp").value)||0; credit+=parseFloat(r.querySelector(".lineCreditInp").value)||0; });
   return {debit,credit};
 }
-function updateJeBalanceBar(){
-  const {debit,credit}=jeLineAmounts(); const bar=document.getElementById("jeBalanceBar"); const diff=Math.round((debit-credit)*100)/100;
+function updateLineBalanceBar(wrapId,barId){
+  const {debit,credit}=lineRowAmounts(wrapId); const bar=document.getElementById(barId); const diff=Math.round((debit-credit)*100)/100;
   bar.textContent=`Debits ${money(debit)} · Credits ${money(credit)}`+(diff!==0?` · Out of balance by ${money(Math.abs(diff))}`:" · Balanced");
   bar.style.color = (diff===0&&debit>0) ? "var(--good)" : (diff!==0 ? "var(--bad)" : "var(--ink-2)");
 }
@@ -271,19 +275,19 @@ document.getElementById("postJeBtn").addEventListener("click", async ()=>{
   if(!txnId){ setErr("jeTxnSelect","Pick a transaction first."); bad=true; }
   const linesToInsert=[];
   document.querySelectorAll("#jeLines > div").forEach(r=>{
-    const accId=r.querySelector(".jeLineAcct").value, dv=parseFloat(r.querySelector(".jeLineDebit").value)||0, cv=parseFloat(r.querySelector(".jeLineCredit").value)||0;
+    const accId=r.querySelector(".lineAcctSel").value, dv=parseFloat(r.querySelector(".lineDebitInp").value)||0, cv=parseFloat(r.querySelector(".lineCreditInp").value)||0;
     if(accId&&(dv>0||cv>0)) linesToInsert.push({owner_id:user.id, transaction_id:txnId, account_id:accId, debit:dv, credit:cv});
   });
   if(linesToInsert.length<2){ document.getElementById("err-jeLines").textContent="Add at least two complete lines."; bad=true; }
-  const {debit,credit}=jeLineAmounts();
+  const {debit,credit}=lineRowAmounts("jeLines");
   if(Math.round((debit-credit)*100)!==0){ document.getElementById("err-jeLines").textContent="Total debits must equal total credits."; bad=true; }
   if(debit===0){ document.getElementById("err-jeLines").textContent="Enter at least one amount greater than zero."; bad=true; }
   if(bad) return;
   const {data,error}=await sb.from("journal_entries").insert(linesToInsert).select();
   if(error){ toast("Couldn't post entry: "+error.message); return; }
   journalEntries.push(...data);
-  document.getElementById("jeLines").innerHTML=""; addJeLine(); addJeLine(); updateJeBalanceBar(); onJeTxnChange();
-  renderJeTable(); renderTransactionsTab(); renderDashboard(); toast("Journal entry posted");
+  document.getElementById("jeLines").innerHTML=""; addLineRow("jeLines","jeBalanceBar"); addLineRow("jeLines","jeBalanceBar"); updateLineBalanceBar("jeLines","jeBalanceBar"); onJeTxnChange();
+  renderJeTable(); renderTransactionsTab(); renderTrialBalance(); renderAdjustedTrialBalance(); renderDashboard(); toast("Journal entry posted");
 });
 function renderJeTable(){
   const tbody=document.querySelector("#jeTable tbody"); tbody.innerHTML="";
@@ -301,8 +305,163 @@ function renderJeTable(){
     const {error}=await sb.from("journal_entries").delete().eq("id",b.dataset.del);
     if(error){ toast("Couldn't delete: "+error.message); return; }
     journalEntries=journalEntries.filter(x=>x.id!==b.dataset.del);
-    renderJeTable(); renderTransactionsTab(); renderDashboard(); toast("Entry deleted");
+    renderJeTable(); renderTransactionsTab(); renderTrialBalance(); renderAdjustedTrialBalance(); renderDashboard(); toast("Entry deleted");
   }));
+}
+
+// ---------- Trial Balance (unadjusted only) ----------
+function netToCols(d,c,normalBalance){
+  const net=d-c; let debitCol=0,creditCol=0;
+  if(normalBalance==="Debit"){ if(net>=0)debitCol=net; else creditCol=-net; } else { if(-net>=0)creditCol=-net; else debitCol=net; }
+  return {debitCol,creditCol};
+}
+function linesForAccount(accountId, adjOnly){
+  const txnIds=new Set(transactions.filter(t=>!!t.is_adjustment===adjOnly).map(t=>t.id));
+  return journalEntries.filter(j=>j.account_id===accountId && txnIds.has(j.transaction_id));
+}
+function renderTrialBalance(){
+  const tbody=document.querySelector("#tbTable tbody"); tbody.innerHTML=""; let totD=0,totC=0;
+  accounts.slice().sort((a,b)=>a.account_number.localeCompare(b.account_number,undefined,{numeric:true})).forEach(a=>{
+    const lines=linesForAccount(a.id,false);
+    const d=lines.reduce((s,l)=>s+Number(l.debit),0), c=lines.reduce((s,l)=>s+Number(l.credit),0);
+    if(d===0&&c===0) return;
+    const {debitCol,creditCol}=netToCols(d,c,a.normal_balance); totD+=debitCol; totC+=creditCol;
+    const tr=document.createElement("tr");
+    tr.innerHTML=`<td>${esc(a.account_number)}</td><td>${esc(a.account_name)}</td><td><span class="pill">${a.account_type}</span></td>
+      <td style="text-align:right">${debitCol!==0?money(debitCol):"—"}</td><td style="text-align:right">${creditCol!==0?money(creditCol):"—"}</td>`;
+    tbody.appendChild(tr);
+  });
+  if(!tbody.children.length) tbody.innerHTML='<tr><td colspan="5" class="empty">Post a journal entry to see your trial balance.</td></tr>';
+  const bar=document.getElementById("tbBalanceBar"); const diff=Math.round((totD-totC)*100)/100;
+  bar.textContent=`Total debits ${money(totD)} · Total credits ${money(totC)}`+(diff===0?" · Balanced ✓":` · Out of balance by ${money(Math.abs(diff))}`);
+  bar.style.color = diff===0 ? "var(--good)" : "var(--bad)";
+}
+
+// ---------- Adjusting Entries ----------
+let editingAdjTxnId=null;
+document.getElementById("addAdjLineBtn").addEventListener("click", ()=>addLineRow("adjLines","adjBalanceBar"));
+document.getElementById("cancelAdjEditBtn").addEventListener("click", resetAdjForm);
+function resetAdjForm(){
+  editingAdjTxnId=null;
+  document.getElementById("adjFormTitle").textContent="New adjusting entry";
+  document.getElementById("postAdjBtn").textContent="Post adjusting entry";
+  document.getElementById("cancelAdjEditBtn").style.display="none";
+  document.getElementById("adjDate").value=new Date().toISOString().slice(0,10);
+  document.getElementById("adjDesc").value=""; document.getElementById("adjComment").value="";
+  document.getElementById("adjLines").innerHTML=""; addLineRow("adjLines","adjBalanceBar"); addLineRow("adjLines","adjBalanceBar"); updateLineBalanceBar("adjLines","adjBalanceBar");
+}
+function editAdjEntry(txnId){
+  const t=transactions.find(x=>x.id===txnId); if(!t) return;
+  editingAdjTxnId=txnId;
+  document.getElementById("adjFormTitle").textContent="Editing adjusting entry";
+  document.getElementById("postAdjBtn").textContent="Save changes";
+  document.getElementById("cancelAdjEditBtn").style.display="inline-block";
+  document.getElementById("adjDate").value=t.date; document.getElementById("adjDesc").value=t.description; document.getElementById("adjComment").value=t.comment||"";
+  const wrap=document.getElementById("adjLines"); wrap.innerHTML="";
+  const lines=journalEntries.filter(j=>j.transaction_id===txnId);
+  (lines.length?lines:[{},{}]).forEach(()=>addLineRow("adjLines","adjBalanceBar"));
+  const rows=wrap.querySelectorAll(":scope > div");
+  lines.forEach((l,i)=>{ if(!rows[i]) return; rows[i].querySelector(".lineAcctSel").value=l.account_id;
+    if(Number(l.debit)>0) rows[i].querySelector(".lineDebitInp").value=l.debit; if(Number(l.credit)>0) rows[i].querySelector(".lineCreditInp").value=l.credit; });
+  updateLineBalanceBar("adjLines","adjBalanceBar");
+  document.querySelector('#view-adj .card').scrollIntoView({behavior:"smooth"});
+}
+document.getElementById("postAdjBtn").addEventListener("click", async ()=>{
+  ["adjDate","adjDesc"].forEach(clearErr); document.getElementById("err-adjLines").textContent="";
+  const dateEl=document.getElementById("adjDate"), descEl=document.getElementById("adjDesc"), commentEl=document.getElementById("adjComment");
+  let bad=false;
+  if(!dateEl.value){ setErr("adjDate","Pick a date."); bad=true; }
+  if(!descEl.value.trim()){ setErr("adjDesc","Describe this adjustment."); bad=true; }
+  if(!commentEl.value.trim()){ document.getElementById("err-adjLines").textContent="An explanation is required for adjusting entries."; bad=true; }
+  const lines=[];
+  document.querySelectorAll("#adjLines > div").forEach(r=>{
+    const accId=r.querySelector(".lineAcctSel").value, dv=parseFloat(r.querySelector(".lineDebitInp").value)||0, cv=parseFloat(r.querySelector(".lineCreditInp").value)||0;
+    if(accId&&(dv>0||cv>0)) lines.push({account_id:accId, debit:dv, credit:cv});
+  });
+  if(lines.length<2){ document.getElementById("err-adjLines").textContent="Add at least two complete lines."; bad=true; }
+  const {debit,credit}=lineRowAmounts("adjLines");
+  if(Math.round((debit-credit)*100)!==0){ document.getElementById("err-adjLines").textContent="Total debits must equal total credits."; bad=true; }
+  if(debit===0){ document.getElementById("err-adjLines").textContent="Enter at least one amount greater than zero."; bad=true; }
+  if(bad) return;
+
+  if(editingAdjTxnId){
+    const {data:updated,error:upErr}=await sb.from("transactions").update({date:dateEl.value,description:descEl.value.trim(),comment:commentEl.value.trim()}).eq("id",editingAdjTxnId).select().single();
+    if(upErr){ toast("Couldn't save: "+upErr.message); return; }
+    const {error:delErr}=await sb.from("journal_entries").delete().eq("transaction_id",editingAdjTxnId);
+    if(delErr){ toast("Couldn't update lines: "+delErr.message); return; }
+    const {data:newLines,error:insErr}=await sb.from("journal_entries").insert(lines.map(l=>({...l,owner_id:user.id,transaction_id:editingAdjTxnId}))).select();
+    if(insErr){ toast("Couldn't save lines: "+insErr.message); return; }
+    transactions=transactions.map(t=>t.id===editingAdjTxnId?updated:t);
+    journalEntries=journalEntries.filter(j=>j.transaction_id!==editingAdjTxnId).concat(newLines);
+    toast("Adjusting entry updated");
+  } else {
+    const {data:newTxn,error:txErr}=await sb.from("transactions").insert({owner_id:user.id,date:dateEl.value,description:descEl.value.trim(),comment:commentEl.value.trim(),is_adjustment:true}).select().single();
+    if(txErr){ toast("Couldn't create entry: "+txErr.message); return; }
+    const {data:newLines,error:insErr}=await sb.from("journal_entries").insert(lines.map(l=>({...l,owner_id:user.id,transaction_id:newTxn.id}))).select();
+    if(insErr){ toast("Couldn't save lines: "+insErr.message); return; }
+    transactions.push(newTxn); journalEntries.push(...newLines);
+    toast("Adjusting entry posted");
+  }
+  resetAdjForm();
+  renderAdjTable(); renderDashboard(); renderTrialBalance(); renderAdjustedTrialBalance();
+});
+async function deleteAdjEntry(txnId){
+  if(!confirm("Delete this adjusting entry and its lines?")) return;
+  const {error}=await sb.from("transactions").delete().eq("id",txnId); // journal_entries cascade on delete
+  if(error){ toast("Couldn't delete: "+error.message); return; }
+  transactions=transactions.filter(t=>t.id!==txnId); journalEntries=journalEntries.filter(j=>j.transaction_id!==txnId);
+  renderAdjTable(); renderDashboard(); renderTrialBalance(); renderAdjustedTrialBalance(); toast("Adjusting entry deleted");
+}
+function renderAdjTable(){
+  const tbody=document.querySelector("#adjTable tbody"); tbody.innerHTML="";
+  const adjs=transactions.filter(t=>!!t.is_adjustment);
+  document.getElementById("adjEmpty").style.display=adjs.length?"none":"block";
+  adjs.slice().sort((a,b)=>b.date.localeCompare(a.date)).forEach(t=>{
+    const tr=document.createElement("tr");
+    tr.innerHTML=`<td>${fmtDate(t.date)}</td><td>${esc(t.description)}</td><td style="color:var(--ink-2)">${esc(t.comment||"—")}</td><td>${statusPill(txnStatus(t))}</td>
+      <td><button class="iconbtn" data-edit="${t.id}" title="Edit">✎</button> <button class="iconbtn" data-del="${t.id}" title="Delete">✕</button></td>`;
+    tbody.appendChild(tr);
+  });
+  tbody.querySelectorAll("[data-edit]").forEach(b=>b.addEventListener("click",()=>editAdjEntry(b.dataset.edit)));
+  tbody.querySelectorAll("[data-del]").forEach(b=>b.addEventListener("click",()=>deleteAdjEntry(b.dataset.del)));
+}
+
+// ---------- Adjusted Trial Balance ----------
+function renderAdjustedTrialBalance(){
+  const tbody=document.querySelector("#atbTable tbody"); tbody.innerHTML="";
+  let totU_d=0,totU_c=0,totA_d=0,totA_c=0,totF_d=0,totF_c=0;
+  accounts.slice().sort((a,b)=>a.account_number.localeCompare(b.account_number,undefined,{numeric:true})).forEach(a=>{
+    const uLines=linesForAccount(a.id,false), aLines=linesForAccount(a.id,true);
+    const ud=uLines.reduce((s,l)=>s+Number(l.debit),0), uc=uLines.reduce((s,l)=>s+Number(l.credit),0);
+    const ad=aLines.reduce((s,l)=>s+Number(l.debit),0), ac=aLines.reduce((s,l)=>s+Number(l.credit),0);
+    if(ud===0&&uc===0&&ad===0&&ac===0) return;
+    const U=netToCols(ud,uc,a.normal_balance), A=netToCols(ad,ac,a.normal_balance), F=netToCols(ud+ad,uc+ac,a.normal_balance);
+    totU_d+=U.debitCol; totU_c+=U.creditCol; totA_d+=A.debitCol; totA_c+=A.creditCol; totF_d+=F.debitCol; totF_c+=F.creditCol;
+    const tr=document.createElement("tr");
+    tr.innerHTML=`<td>${esc(a.account_number)}</td><td>${esc(a.account_name)}</td><td><span class="pill">${a.account_type}</span></td>
+      <td style="text-align:right">${U.debitCol!==0?money(U.debitCol):"—"}</td><td style="text-align:right">${U.creditCol!==0?money(U.creditCol):"—"}</td>
+      <td style="text-align:right">${A.debitCol!==0?money(A.debitCol):"—"}</td><td style="text-align:right">${A.creditCol!==0?money(A.creditCol):"—"}</td>
+      <td style="text-align:right">${F.debitCol!==0?money(F.debitCol):"—"}</td><td style="text-align:right">${F.creditCol!==0?money(F.creditCol):"—"}</td>`;
+    tbody.appendChild(tr);
+  });
+  if(!tbody.children.length) tbody.innerHTML='<tr><td colspan="9" class="empty">Post a transaction to see your adjusted trial balance.</td></tr>';
+  const bar=document.getElementById("atbBalanceBar"); const diff=Math.round((totF_d-totF_c)*100)/100;
+  bar.textContent=`Unadjusted ${money(totU_d)} / ${money(totU_c)} · Adjustments ${money(totA_d)} / ${money(totA_c)} · Adjusted ${money(totF_d)} / ${money(totF_c)}`+(diff===0?" · Balanced ✓":` · Out of balance by ${money(Math.abs(diff))}`);
+  bar.style.color = diff===0 ? "var(--good)" : "var(--bad)";
+
+  // Pinpoint exactly which transactions are unbalanced (e.g. a line was deleted after posting)
+  const byTxn={};
+  journalEntries.forEach(l=>{ byTxn[l.transaction_id]=byTxn[l.transaction_id]||{d:0,c:0}; byTxn[l.transaction_id].d+=Number(l.debit); byTxn[l.transaction_id].c+=Number(l.credit); });
+  const offenders=Object.entries(byTxn).filter(([id,s])=>Math.round((s.d-s.c)*100)!==0).map(([id,s])=>{
+    const t=transactions.find(x=>x.id===id);
+    return {t,diff:s.d-s.c};
+  }).filter(o=>o.t);
+  const missEl=document.getElementById("atbMissing");
+  if(offenders.length){
+    missEl.style.display="block";
+    missEl.innerHTML="⚠ These transactions don't balance on their own, which is throwing off the totals above:<br>"+
+      offenders.map(o=>`• ${fmtDate(o.t.date)} — ${esc(o.t.description)} (short by ${money(Math.abs(o.diff))} on the ${o.diff>0?"credit":"debit"} side)`).join("<br>");
+  } else { missEl.style.display="none"; }
 }
 
 // ---------- Export to Excel ----------
