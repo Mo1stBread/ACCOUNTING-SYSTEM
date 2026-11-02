@@ -8,10 +8,11 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 </head>
 <body>
+
 <div id="authScreen">
   <div class="card">
     <h2>Sign in</h2>
-    <p class="sub" id="authSub">Your data stays private to your account unless you choose to share it.</p>
+    <p class="sub">You must be signed in to use this system. </p>
     <div class="field"><label>Email</label><input id="authEmail" type="email"></div>
     <div class="field" style="margin-top:8px"><label>Password</label><input id="authPass" type="password"></div>
     <div class="errtext" id="authErr"></div>
@@ -25,103 +26,82 @@
 <div id="appScreen" style="display:none">
 <header>
   <div class="headrow">
-    <div class="brand"><div class="mark">$</div><div><h1></h1><p>Accounting for your business</p></div></div>
+    <div class="brand"><div class="mark">$</div><div><h1>Ledgerline</h1><p>Accounting for your business</p></div></div>
     <div class="ctl">
-      <select id="currencySel"><option value="PHP">₱ PHP</option><option value="USD">$ USD</option></select>
-      <span style="width:1px;height:18px;background:var(--border)"></span>
-      <label class="switch"><input type="checkbox" id="fyToggle"><span class="slider"></span></label>
-      <span id="fyLabel">Calendar year (Jan–Dec)</span>
-      <select id="fyMonth" style="display:none"></select>
-      <span style="width:1px;height:18px;background:var(--border)"></span>
-      <label class="switch"><input type="checkbox" id="shareToggle"><span class="slider"></span></label>
-      <span id="shareLabel">Private (only you)</span>
-      <button class="btn ghost" id="copyLinkBtn" style="display:none">Copy share link</button>
+      <button class="btn ghost" id="exportBtn">Export to Excel</button>
       <button class="btn ghost" id="signOutBtn">Sign out</button>
     </div>
   </div>
-  <nav>
-    <button class="tab active" data-view="coa">Chart of Accounts</button>
+  <nav id="mainNav">
+    <button class="tab active" data-view="dash">Dashboard</button>
+    <button class="tab" data-view="coa">Chart of Accounts</button>
     <button class="tab" data-view="txn">Transactions</button>
-    <button class="tab" data-view="adj">Adjusting Entries</button>
+    <button class="tab" data-view="je">Journal Entries</button>
     <button class="tab" data-view="tb">Trial Balance</button>
+    <button class="tab" data-view="adj">Adjusting Entries</button>
+    <button class="tab" data-view="atb">Adjusted Trial Balance</button>
+    <button class="tab" data-view="is">Income Statement</button>
+    <button class="tab" data-view="soe">Statement of Owner's Equity</button>
   </nav>
-  <div id="viewOnlyBanner" style="display:none;max-width:1100px;margin:10px auto 0;padding:8px 14px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;font-size:12.5px;color:var(--ink-2)">You're viewing this ledger — only the owner can make changes.</div>
 </header>
 <main>
-  <section class="view active" id="view-coa">
+
+  <!-- DASHBOARD -->
+  <section class="view active" id="view-dash">
+    <div class="grid">
+      <div class="card stat"><p class="statlabel">Total transactions</p><p class="statval" id="statTotal">0</p></div>
+      <div class="card stat"><p class="statlabel">Recorded</p><p class="statval good" id="statRecorded">0</p></div>
+      <div class="card stat"><p class="statlabel">Pending</p><p class="statval warn" id="statPending">0</p></div>
+      <div class="card stat"><p class="statlabel">Original journal entries</p><p class="statval" id="statOriginal">0</p></div>
+      <div class="card stat"><p class="statlabel">Adjusting entries</p><p class="statval" id="statAdjusting">0</p></div>
+      <div class="card stat"><p class="statlabel">Trial balance status</p><p class="statval" id="statTbStatus">—</p></div>
+      <div class="card stat"><p class="statlabel">Net income</p><p class="statval" id="statNetIncome">—</p></div>
+    </div>
+    <div class="card">
+      <h2>Recorded vs. pending</h2>
+      <p class="sub">Share of all transactions that have balanced journal entries posted.</p>
+      <div class="donutwrap">
+        <div class="donut" id="donutChart"></div>
+        <div class="donutlegend" id="donutLegend"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CHART OF ACCOUNTS -->
+  <section class="view" id="view-coa">
     <div class="card">
       <h2>Add an account</h2>
-      <p class="sub">Every account needs a code, a name, and a type.</p>
+      <p class="sub">Normal balance is set automatically based on the account type.</p>
       <div class="row">
-        <div class="field"><label>Code</label><input id="coaCode"><div class="errtext" id="err-coaCode"></div></div>
-        <div class="field" style="flex:2"><label>Name</label><input id="coaName"><div class="errtext" id="err-coaName"></div></div>
+        <div class="field"><label>Account number</label><input id="coaNumber"><div class="errtext" id="err-coaNumber"></div></div>
+        <div class="field" style="flex:2"><label>Account name</label><input id="coaName"><div class="errtext" id="err-coaName"></div></div>
         <div class="field"><label>Type</label><select id="coaType"><option>Asset</option><option>Liability</option><option>Equity</option><option>Revenue</option><option>Expense</option></select></div>
       </div>
+      <div class="field" style="margin-top:8px"><label>Description (optional)</label><input id="coaDesc"></div>
       <div style="margin-top:12px"><button class="btn" id="addAccountBtn">Add account</button></div>
     </div>
     <div class="card"><h2>Your accounts</h2>
-      <div class="tablewrap"><table id="coaTable"><thead><tr><th>Code</th><th>Name</th><th>Type</th><th>Normal balance</th><th></th></tr></thead><tbody></tbody></table></div>
-      <div class="empty" id="coaEmpty" style="display:none">No accounts yet.</div>
+      <div class="tablewrap"><table id="coaTable"><thead><tr><th>Number</th><th>Name</th><th>Description</th><th>Type</th><th>Normal balance</th><th></th></tr></thead><tbody></tbody></table></div>
+      <div class="empty" id="coaEmpty" style="display:none">No accounts yet. Add your first one above.</div>
     </div>
   </section>
-  <section class="view" id="view-txn">
-    <div class="card">
-      <h2>Record a transaction</h2>
-      <p class="sub">Debits must equal credits. For period-end adjustments, use the Adjusting Entries tab instead.</p>
-      <div class="row">
-        <div class="field"><label>Date</label><input type="date" id="txnDate"><div class="errtext" id="err-txnDate"></div></div>
-        <div class="field" style="flex:2"><label>Description</label><input id="txnDesc"><div class="errtext" id="err-txnDesc"></div></div>
-      </div>
-      <div style="margin-top:10px" id="txnLines"></div>
-      <button class="btn ghost" id="addLineBtn">+ Add line</button>
-      <div class="field" style="margin-top:12px"><label>Comment (optional)</label><textarea id="txnComment" rows="2"></textarea></div>
-      <div class="balancebar" id="balanceBar"></div>
-      <div class="errtext" id="err-txnLines"></div>
-      <div style="margin-top:10px"><button class="btn" id="postTxnBtn">Post transaction</button></div>
-    </div>
-    <div class="card"><h2>Transaction history</h2>
-      <div class="tablewrap"><table id="txnTable"><thead><tr><th>Date</th><th>Description</th><th>Lines</th><th>Comment</th><th class="num">Amount</th><th></th></tr></thead><tbody></tbody></table></div>
-      <div class="empty" id="txnEmpty" style="display:none">No transactions yet.</div>
-    </div>
-  </section>
-  <section class="view" id="view-adj">
-    <div class="card">
-      <h2>Record an adjusting entry</h2>
-      <p class="sub">For period-end items like accrued expenses, depreciation, prepaid write-offs, or corrections. A comment explaining why is required.</p>
-      <div class="row">
-        <div class="field"><label>Date</label><input type="date" id="adjDate"><div class="errtext" id="err-adjDate"></div></div>
-        <div class="field" style="flex:2"><label>Description</label><input id="adjDesc"><div class="errtext" id="err-adjDesc"></div></div>
-      </div>
-      <div style="margin-top:10px" id="adjLines"></div>
-      <button class="btn ghost" id="addAdjLineBtn">+ Add line</button>
-      <div class="field" style="margin-top:12px"><label>Comment (required) — why this adjustment is needed</label><textarea id="adjComment" rows="2" placeholder="e.g. Accrue October rent not yet invoiced"></textarea></div>
-      <div class="balancebar" id="adjBalanceBar"></div>
-      <div class="errtext" id="err-adjLines"></div>
-      <div style="margin-top:10px"><button class="btn" id="postAdjBtn">Post adjusting entry</button></div>
-    </div>
-    <div class="card"><h2>Adjusting entry history</h2>
-      <div class="tablewrap"><table id="adjTable"><thead><tr><th>Date</th><th>Description</th><th>Lines</th><th>Comment</th><th class="num">Amount</th><th></th></tr></thead><tbody></tbody></table></div>
-      <div class="empty" id="adjEmpty" style="display:none">No adjusting entries yet.</div>
-    </div>
-  </section>
-  <section class="view" id="view-tb">
-    <div class="card"><h2>Trial balance</h2>
-      <p class="sub" id="tbPeriodLabel">Recalculates automatically from every posted transaction and adjusting entry.</p>
-      <div class="tablewrap"><table id="tbTable"><thead>
-        <tr><th rowspan="2">Code</th><th rowspan="2">Account</th><th rowspan="2">Type</th>
-          <th colspan="2" style="text-align:center">Unadjusted</th>
-          <th colspan="2" style="text-align:center">Adjustments</th>
-          <th colspan="2" style="text-align:center">Adjusted</th></tr>
-        <tr><th class="num">Debit</th><th class="num">Credit</th><th class="num">Debit</th><th class="num">Credit</th><th class="num">Debit</th><th class="num">Credit</th></tr>
-      </thead><tbody></tbody></table></div>
-      <div class="balancebar" id="tbBalanceBar"></div>
-    </div>
-  </section>
+
+  <!-- PLACEHOLDERS FOR LATER PHASES -->
+  <section class="view" id="view-txn"><div class="card"><h2>Transactions</h2><p class="sub">Coming in Phase 2: transaction headers with auto status, and drill-down into related journal entries per account.</p></div></section>
+  <section class="view" id="view-je"><div class="card"><h2>Journal Entries</h2><p class="sub">Coming in Phase 2: posting the actual debit/credit lines tied to a transaction.</p></div></section>
+  <section class="view" id="view-tb"><div class="card"><h2>Trial Balance</h2><p class="sub">Coming in Phase 3.</p></div></section>
+  <section class="view" id="view-adj"><div class="card"><h2>Adjusting Entries</h2><p class="sub">Coming in Phase 3: editable adjusting journal entries.</p></div></section>
+  <section class="view" id="view-atb"><div class="card"><h2>Adjusted Trial Balance</h2><p class="sub">Coming in Phase 3: with out-of-balance highlighting.</p></div></section>
+  <section class="view" id="view-is"><div class="card"><h2>Income Statement</h2><p class="sub">Coming in Phase 4: custom date range.</p></div></section>
+  <section class="view" id="view-soe"><div class="card"><h2>Statement of Owner's Equity</h2><p class="sub">Coming in Phase 4: custom date range.</p></div></section>
+
 </main>
+<footer>Your data lives in your own Supabase project.</footer>
 </div>
 <div class="toast" id="toast"></div>
-<div class="modal-bg" id="confirmBg"><div class="modal"><h2 style="margin-top:0;font-size:15px" id="confirmText"></h2>
-<div class="row" style="margin-top:14px"><button class="btn ghost" id="confirmNo">Cancel</button><button class="btn danger" id="confirmYes">Delete</button></div></div></div>
+
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="config.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
