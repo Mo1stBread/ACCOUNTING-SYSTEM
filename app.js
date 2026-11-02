@@ -320,9 +320,10 @@ function renderJeTable(){
   const tbody=document.querySelector("#jeTable tbody"); tbody.innerHTML="";
   document.getElementById("jeEmpty").style.display=journalEntries.length?"none":"block";
   journalEntries.slice().sort((a,b)=>b.created_at.localeCompare(a.created_at)).forEach(l=>{
-    const a=accounts.find(x=>x.id===l.account_id);
+    const a=accounts.find(x=>x.id===l.account_id), t=transactions.find(x=>x.id===l.transaction_id);
+    const txnLabel = t ? `${fmtDate(t.date)} — ${esc(t.description)}` : "(deleted transaction)";
     const tr=document.createElement("tr");
-    tr.innerHTML=`<td>${shortId(l.transaction_id)}</td><td>${a?esc(a.account_name):"—"}</td>
+    tr.innerHTML=`<td title="${l.transaction_id}">${txnLabel}</td><td>${a?esc(a.account_name):"—"}</td>
       <td style="text-align:right">${Number(l.debit)>0?money(l.debit):"—"}</td><td style="text-align:right">${Number(l.credit)>0?money(l.credit):"—"}</td>
       <td><button class="iconbtn" data-del="${l.id}">✕</button></td>`;
     tbody.appendChild(tr);
