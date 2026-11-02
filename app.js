@@ -49,6 +49,10 @@ async function boot(){
   renderAdjustedTrialBalance();
   renderDashboard();
   document.getElementById("txnDate").value=new Date().toISOString().slice(0,10);
+  const today=new Date(), firstOfMonth=new Date(today.getFullYear(),today.getMonth(),1).toISOString().slice(0,10), todayStr=today.toISOString().slice(0,10);
+  document.getElementById("isStart").value=firstOfMonth; document.getElementById("isEnd").value=todayStr;
+  document.getElementById("soeStart").value=firstOfMonth; document.getElementById("soeEnd").value=todayStr;
+  renderIncomeStatement(); renderSOE();
 }
 async function loadAll(){
   const [a,t,j]=await Promise.all([
@@ -464,18 +468,130 @@ function renderAdjustedTrialBalance(){
   } else { missEl.style.display="none"; }
 }
 
+// ---------- Shared period helpers ----------
+function entriesForAccountInRange(accountId, start, end){
+  const txnIds=new Set(transactions.filter(t=>t.date>=start && t.date<=end).map(t=>t.id));
+  return journalEntries.filter(j=>j.account_id===accountId && txnIds.has(j.transaction_id));
+}
+function entriesForAccountBefore(accountId, beforeDate){
+  const txnIds=new Set(transactions.filter(t=>t.date<beforeDate).map(t=>t.id));
+  return journalEntries.filter(j=>j.account_id===accountId && txnIds.has(j.transaction_id));
+}
+function netAmount(lines, normalBalance){
+  const d=lines.reduce((s,l)=>s+Number(l.debit),0), c=lines.reduce((s,l)=>s+Number(l.credit),0);
+  return normalBalance==="Debit" ? d-c : c-d;
+}
+function computeNetIncome(start,end){
+  let revenue=0, expense=0;
+  accounts.forEach(a=>{
+    const lines=entriesForAccountInRange(a.id,start,end);
+    if(a.account_type==="Revenue") revenue+=netAmount(lines,"Credit");
+    if(a.account_type==="Expense") expense+=netAmount(lines,"Debit");
+  });
+  return {revenue,expense,netIncome:revenue-expense};
+}
+
+// ---------- Income Statement ----------
+function renderIncomeStatement(){
+  const start=document.getElementById("isStart").value, end=document.getElementById("isEnd").value;
+  const out=document.getElementById("isOutput");
+  if(!start||!end){ out.innerHTML='<p class="empty">Pick a start and end date.</p>'; return; }
+  const revRows=accounts.filter(a=>a.account_type==="Revenue").map(a=>({a,amt:netAmount(entriesForAccountInRange(a.id,start,end),"Credit")})).filter(r=>r.amt!==0);
+  const expRows=accounts.filter(a=>a.account_type==="Expense").map(a=>({a,amt:netAmount(entriesForAccountInRange(a.id,start,end),"Debit")})).filter(r=>r.amt!==0);
+  const totalRev=revRows.reduce((s,r)=>s+r.amt,0), totalExp=expRows.reduce((s,r)=>s+r.amt,0);
+  const row=r=>`<tr><td>${esc(r.a.account_name)}</td><td style="text-align:right">${money(r.amt)}</td></tr>`;
+  out.innerHTML=`<p class="sub">For the period ${fmtDate(start)} – ${fmtDate(end)}</p>
+    <table><thead><tr><th>Revenue</th><th style="text-align:right"></th></tr></thead><tbody>
+      ${revRows.map(row).join("")||'<tr><td colspan="2" class="empty">None</td></tr>'}
+      <tr><td><strong>Total revenue</strong></td><td style="text-align:right"><strong>${money(totalRev)}</strong></td></tr>
+    </tbody></table>
+    <table style="margin-top:14px"><thead><tr><th>Expenses</th><th style="text-align:right"></th></tr></thead><tbody>
+      ${expRows.map(row).join("")||'<tr><td colspan="2" class="empty">None</td></tr>'}
+      <tr><td><strong>Total expenses</strong></td><td style="text-align:right"><strong>${money(totalExp)}</strong></td></tr>
+    </tbody></table>
+    <div class="balancebar" style="margin-top:14px;padding:12px;border-radius:8px;background:var(--surface-2);font-weight:700;color:${totalRev-totalExp>=0?'var(--good)':'var(--bad)'}">
+      Net ${totalRev-totalExp>=0?"income":"loss"}: ${money(Math.abs(totalRev-totalExp))}
+    </div>`;
+}
+document.getElementById("isStart").addEventListener("change", renderIncomeStatement);
+document.getElementById("isEnd").addEventListener("change", renderIncomeStatement);
+
+// ---------- Statement of Owner's Equity ----------
+function isDrawing(a){ return a.account_type==="Equity" && /draw/i.test(a.account_name); }
+function renderSOE(){
+  const start=document.getElementById("soeStart").value, end=document.getElementById("soeEnd").value;
+  const out=document.getElementById("soeOutput");
+  if(!start||!end){ out.innerHTML='<p class="empty">Pick a start and end date.</p>'; return; }
+  let beginning=0, investments=0, drawings=0;
+  accounts.filter(a=>a.account_type==="Equity").forEach(a=>{
+    beginning += netAmount(entriesForAccountBefore(a.id,start),"Credit");
+    const periodLines=entriesForAccountInRange(a.id,start,end);
+    if(isDrawing(a)) drawings += netAmount(periodLines,"Debit");
+    else investments += netAmount(periodLines,"Credit");
+  });
+  const {netIncome}=computeNetIncome(start,end);
+  const ending=beginning+investments+netIncome-drawings;
+  out.innerHTML=`<p class="sub">For the period ${fmtDate(start)} – ${fmtDate(end)}</p>
+    <table><tbody>
+      <tr><td>Beginning capital</td><td style="text-align:right">${money(beginning)}</td></tr>
+      <tr><td>Add: Owner investments</td><td style="text-align:right">${money(investments)}</td></tr>
+      <tr><td>Add: Net income (or less: net loss)</td><td style="text-align:right">${money(netIncome)}</td></tr>
+      <tr><td>Less: Owner drawings</td><td style="text-align:right">(${money(drawings)})</td></tr>
+      <tr><td><strong>Ending capital</strong></td><td style="text-align:right"><strong>${money(ending)}</strong></td></tr>
+    </tbody></table>`;
+}
+document.getElementById("soeStart").addEventListener("change", renderSOE);
+document.getElementById("soeEnd").addEventListener("change", renderSOE);
+
 // ---------- Export to Excel ----------
 document.getElementById("exportBtn").addEventListener("click", ()=>{
   const wb=XLSX.utils.book_new();
   const coaRows=accounts.map(a=>({"Account Number":a.account_number,"Account Name":a.account_name,"Description":a.description||"","Type":a.account_type,"Normal Balance":a.normal_balance}));
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(coaRows), "Chart of Accounts");
+
   const txnRows=transactions.map(t=>({"Date":t.date,"Description":t.description,"Status":txnStatus(t),"Type":t.is_adjustment?"Adjusting":"Regular","Comment":t.comment||""}));
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(txnRows), "Transactions");
+
   const jeRows=journalEntries.map(j=>{
-    const a=accounts.find(x=>x.id===j.account_id);
-    return {"Transaction ID":j.transaction_id,"Account Number":a?a.account_number:"","Account Name":a?a.account_name:"","Debit":j.debit,"Credit":j.credit};
+    const a=accounts.find(x=>x.id===j.account_id), t=transactions.find(x=>x.id===j.transaction_id);
+    return {"Transaction ID":j.transaction_id,"Date":t?t.date:"","Account Number":a?a.account_number:"","Account Name":a?a.account_name:"","Debit":Number(j.debit),"Credit":Number(j.credit)};
   });
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(jeRows), "Journal Entries");
+
+  const tbRows=[]; accounts.forEach(a=>{ const lines=linesForAccount(a.id,false); const d=lines.reduce((s,l)=>s+Number(l.debit),0), c=lines.reduce((s,l)=>s+Number(l.credit),0);
+    if(d===0&&c===0) return; const {debitCol,creditCol}=netToCols(d,c,a.normal_balance);
+    tbRows.push({"Account Number":a.account_number,"Account Name":a.account_name,"Debit":debitCol||"","Credit":creditCol||""}); });
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(tbRows), "Trial Balance");
+
+  const atbRows=[]; accounts.forEach(a=>{ const uL=linesForAccount(a.id,false), aL=linesForAccount(a.id,true);
+    const ud=uL.reduce((s,l)=>s+Number(l.debit),0), uc=uL.reduce((s,l)=>s+Number(l.credit),0), ad=aL.reduce((s,l)=>s+Number(l.debit),0), ac=aL.reduce((s,l)=>s+Number(l.credit),0);
+    if(ud===0&&uc===0&&ad===0&&ac===0) return; const F=netToCols(ud+ad,uc+ac,a.normal_balance);
+    atbRows.push({"Account Number":a.account_number,"Account Name":a.account_name,"Adjusted Debit":F.debitCol||"","Adjusted Credit":F.creditCol||""}); });
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(atbRows), "Adjusted Trial Balance");
+
+  const isStart=document.getElementById("isStart").value, isEnd=document.getElementById("isEnd").value;
+  if(isStart && isEnd){
+    const revRows=accounts.filter(a=>a.account_type==="Revenue").map(a=>({"Line":a.account_name,"Amount":netAmount(entriesForAccountInRange(a.id,isStart,isEnd),"Credit")})).filter(r=>r.Amount!==0);
+    const expRows=accounts.filter(a=>a.account_type==="Expense").map(a=>({"Line":a.account_name,"Amount":netAmount(entriesForAccountInRange(a.id,isStart,isEnd),"Debit")})).filter(r=>r.Amount!==0);
+    const {revenue,expense,netIncome}=computeNetIncome(isStart,isEnd);
+    const isRows=[{"Line":"Period","Amount":isStart+" to "+isEnd},{},...revRows,{"Line":"Total Revenue","Amount":revenue},{},...expRows,{"Line":"Total Expenses","Amount":expense},{},{"Line":"Net Income","Amount":netIncome}];
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(isRows), "Income Statement");
+  }
+
+  const soeStart=document.getElementById("soeStart").value, soeEnd=document.getElementById("soeEnd").value;
+  if(soeStart && soeEnd){
+    let beginning=0, investments=0, drawings=0;
+    accounts.filter(a=>a.account_type==="Equity").forEach(a=>{
+      beginning+=netAmount(entriesForAccountBefore(a.id,soeStart),"Credit");
+      const pl=entriesForAccountInRange(a.id,soeStart,soeEnd);
+      if(isDrawing(a)) drawings+=netAmount(pl,"Debit"); else investments+=netAmount(pl,"Credit");
+    });
+    const {netIncome}=computeNetIncome(soeStart,soeEnd);
+    const soeRows=[{"Line":"Period","Amount":soeStart+" to "+soeEnd},{"Line":"Beginning Capital","Amount":beginning},{"Line":"Owner Investments","Amount":investments},
+      {"Line":"Net Income","Amount":netIncome},{"Line":"Owner Drawings","Amount":-drawings},{"Line":"Ending Capital","Amount":beginning+investments+netIncome-drawings}];
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(soeRows), "Statement of Owner's Equity");
+  }
+
   XLSX.writeFile(wb, "ledgerline-export.xlsx");
   toast("Exported to Excel");
 });
