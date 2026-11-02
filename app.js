@@ -191,6 +191,16 @@ document.getElementById("createTxnBtn").addEventListener("click", async ()=>{
   document.getElementById("jeTxnSelect").value=data.id;
   onJeTxnChange();
 });
+async function deleteTxn(id){
+  const lineCount=journalEntries.filter(j=>j.transaction_id===id).length;
+  if(!confirm(lineCount ? `Delete this transaction and its ${lineCount} journal entry line(s)?` : "Delete this transaction?")) return;
+  const {error}=await sb.from("transactions").delete().eq("id",id); // journal_entries cascade on delete
+  if(error){ toast("Couldn't delete: "+error.message); return; }
+  transactions=transactions.filter(t=>t.id!==id); journalEntries=journalEntries.filter(j=>j.transaction_id!==id);
+  document.getElementById("txnDetail").style.display="none";
+  renderTransactionsTab(); populateJeTxnSelect(); renderJeTable(); renderTrialBalance(); renderAdjustedTrialBalance(); renderDashboard();
+  toast("Transaction deleted");
+}
 function statusPill(status){ return `<span class="pill" style="color:${status==='Recorded'?'var(--good)':'var(--warn)'}">${status}</span>`; }
 function renderTransactionsTab(){
   const tbody=document.querySelector("#txnTable tbody"); tbody.innerHTML="";
@@ -199,10 +209,11 @@ function renderTransactionsTab(){
   regular.slice().sort((a,b)=>b.date.localeCompare(a.date)).forEach(t=>{
     const tr=document.createElement("tr");
     tr.innerHTML=`<td>${fmtDate(t.date)}</td><td>${esc(t.description)}</td><td>${statusPill(txnStatus(t))}</td>
-      <td><button class="iconbtn" data-view-id="${t.id}" title="View entries">👁</button></td>`;
+      <td><button class="iconbtn" data-view-id="${t.id}" title="View entries">👁</button> <button class="iconbtn" data-del-txn="${t.id}" title="Delete">✕</button></td>`;
     tbody.appendChild(tr);
   });
   tbody.querySelectorAll("[data-view-id]").forEach(b=>b.addEventListener("click",()=>showTxnDetail(b.dataset.viewId)));
+  tbody.querySelectorAll("[data-del-txn]").forEach(b=>b.addEventListener("click",()=>deleteTxn(b.dataset.delTxn)));
   renderAccountChips();
 }
 function showTxnDetail(id){
