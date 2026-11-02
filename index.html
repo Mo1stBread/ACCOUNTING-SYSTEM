@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Accounting Management System</title>
+<title>Ledgerline — Accounting Management System</title>
 <link rel="stylesheet" href="styles.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 </head>
@@ -11,7 +11,8 @@
 
 <div id="authScreen">
   <div class="card">
-    <h2>Sign in</h2>
+    <h2>Sign in to Ledgerline</h2>
+    <p class="sub">You must be signed in to use this system — your data is private to your account.</p>
     <div class="field"><label>Email</label><input id="authEmail" type="email"></div>
     <div class="field" style="margin-top:8px"><label>Password</label><input id="authPass" type="password"></div>
     <div class="errtext" id="authErr"></div>
@@ -25,7 +26,7 @@
 <div id="appScreen" style="display:none">
 <header>
   <div class="headrow">
-    <div class="brand"><div class="mark">$</div><div><p>Accounting for your business</p></div></div>
+    <div class="brand"><div class="mark">$</div><div><h1>Ledgerline</h1><p>Accounting for your business</p></div></div>
     <div class="ctl">
       <button class="btn ghost" id="exportBtn">Export to Excel</button>
       <button class="btn ghost" id="signOutBtn">Sign out</button>
