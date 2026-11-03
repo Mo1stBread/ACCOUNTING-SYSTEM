@@ -213,6 +213,19 @@ async function deleteTxn(id){
   renderTransactionsTab(); populateJeTxnSelect(); renderJeTable(); renderTrialBalance(); renderAdjustedTrialBalance(); renderDashboard();
   toast("Transaction deleted");
 }
+async function recategorizeTxn(id, toAdjustment){
+  const t=transactions.find(x=>x.id===id); if(!t) return;
+  let comment=t.comment;
+  if(toAdjustment && !comment){
+    comment=prompt("Adjusting entries need an explanation. Why is this an adjustment?","")||"";
+    if(!comment.trim()){ toast("Cancelled — an explanation is required to mark this as adjusting."); return; }
+  }
+  const {data,error}=await sb.from("transactions").update({is_adjustment:toAdjustment, comment}).eq("id",id).select().single();
+  if(error){ toast("Couldn't move: "+error.message); return; }
+  transactions=transactions.map(x=>x.id===id?data:x);
+  renderTransactionsTab(); renderAdjTable(); renderTrialBalance(); renderAdjustedTrialBalance(); renderDashboard(); populateJeTxnSelect();
+  toast(toAdjustment ? "Moved to Adjusting Entries" : "Moved to Transactions");
+}
 function statusPill(status){ return `<span class="pill" style="color:${status==='Recorded'?'var(--good)':'var(--warn)'}">${status}</span>`; }
 function renderTransactionsTab(){
   const tbody=document.querySelector("#txnTable tbody"); tbody.innerHTML="";
@@ -221,11 +234,13 @@ function renderTransactionsTab(){
   regular.slice().sort((a,b)=>b.date.localeCompare(a.date)).forEach(t=>{
     const tr=document.createElement("tr");
     tr.innerHTML=`<td>${fmtDate(t.date)}</td><td>${esc(t.description)}</td><td>${statusPill(txnStatus(t))}</td>
-      <td><button class="iconbtn" data-view-id="${t.id}" title="View entries">👁</button> <button class="iconbtn" data-del-txn="${t.id}" title="Delete">✕</button></td>`;
+      <td><button class="iconbtn" data-view-id="${t.id}" title="View entries">👁</button> <button class="iconbtn" data-del-txn="${t.id}" title="Delete">✕</button>
+        <button class="btn ghost" style="font-size:11px;padding:4px 8px" data-to-adj="${t.id}">Move to Adjusting</button></td>`;
     tbody.appendChild(tr);
   });
   tbody.querySelectorAll("[data-view-id]").forEach(b=>b.addEventListener("click",()=>showTxnDetail(b.dataset.viewId)));
   tbody.querySelectorAll("[data-del-txn]").forEach(b=>b.addEventListener("click",()=>deleteTxn(b.dataset.delTxn)));
+  tbody.querySelectorAll("[data-to-adj]").forEach(b=>b.addEventListener("click",()=>recategorizeTxn(b.dataset.toAdj,true)));
   renderAccountChips();
 }
 function showTxnDetail(id){
@@ -252,10 +267,12 @@ function showAccountLedger(accountId){
   const lines=journalEntries.filter(j=>j.account_id===accountId);
   const rows=lines.map(l=>{
     const t=transactions.find(x=>x.id===l.transaction_id);
-    return `<tr><td>${shortId(l.id)}</td><td>${t?shortId(t.id):"—"}</td><td>${t?fmtDate(t.date):"—"}</td><td>${t?esc(t.description):"—"}</td>
-      <td>${t?statusPill(txnStatus(t)):"—"}</td><td style="text-align:right">${Number(l.debit)>0?money(l.debit):"—"}</td><td style="text-align:right">${Number(l.credit)>0?money(l.credit):"—"}</td></tr>`;
+    return `<tr><td title="${l.id}">JE-${shortId(l.id)}</td><td title="${l.transaction_id}">TXN-${t?shortId(t.id):"—"}</td><td>${t?fmtDate(t.date):"—"}</td><td>${t?esc(t.description):"—"}</td>
+      <td><span class="pill">${t&&t.is_adjustment?"Adjusting":"Regular"}</span> ${t?statusPill(txnStatus(t)):"—"}</td>
+      <td style="text-align:right">${Number(l.debit)>0?money(l.debit):"—"}</td><td style="text-align:right">${Number(l.credit)>0?money(l.credit):"—"}</td></tr>`;
   }).join("") || '<tr><td colspan="7" style="color:var(--muted)">No journal entries for this account yet.</td></tr>';
   document.getElementById("accountLedger").innerHTML=`<h2 style="font-size:14px">${esc(a.account_number)} — ${esc(a.account_name)}</h2>
+    <p class="sub" style="margin-top:0">JE-xxx and TXN-xxx are reference numbers — hover one to see its full ID.</p>
     <div class="tablewrap"><table><thead><tr><th>Journal entry no.</th><th>Transaction ID</th><th>Date</th><th>Description</th><th>Status</th><th style="text-align:right">Debit</th><th style="text-align:right">Credit</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
@@ -447,11 +464,13 @@ function renderAdjTable(){
   adjs.slice().sort((a,b)=>b.date.localeCompare(a.date)).forEach(t=>{
     const tr=document.createElement("tr");
     tr.innerHTML=`<td>${fmtDate(t.date)}</td><td>${esc(t.description)}</td><td style="color:var(--ink-2)">${esc(t.comment||"—")}</td><td>${statusPill(txnStatus(t))}</td>
-      <td><button class="iconbtn" data-edit="${t.id}" title="Edit">✎</button> <button class="iconbtn" data-del="${t.id}" title="Delete">✕</button></td>`;
+      <td><button class="iconbtn" data-edit="${t.id}" title="Edit">✎</button> <button class="iconbtn" data-del="${t.id}" title="Delete">✕</button>
+        <button class="btn ghost" style="font-size:11px;padding:4px 8px" data-to-reg="${t.id}">Move to Regular</button></td>`;
     tbody.appendChild(tr);
   });
   tbody.querySelectorAll("[data-edit]").forEach(b=>b.addEventListener("click",()=>editAdjEntry(b.dataset.edit)));
   tbody.querySelectorAll("[data-del]").forEach(b=>b.addEventListener("click",()=>deleteAdjEntry(b.dataset.del)));
+  tbody.querySelectorAll("[data-to-reg]").forEach(b=>b.addEventListener("click",()=>recategorizeTxn(b.dataset.toReg,false)));
 }
 
 // ---------- Adjusted Trial Balance ----------
