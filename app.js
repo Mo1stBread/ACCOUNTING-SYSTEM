@@ -10,6 +10,8 @@ let accounts=[], transactions=[], journalEntries=[];
 
 function normalSide(t){return (t==="Asset"||t==="Expense")?"Debit":"Credit";}
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
+function num(v){return parseFloat(String(v).replace(/[,\s₱]/g,""))||0;} // "44,237.50" -> 44237.5 (parseFloat alone gives 44)
+function totalsRow(label,span,vals){ return `<tr class="totals"><td colspan="${span}">${label}</td>${vals.map(v=>`<td style="text-align:right">${money(v)}</td>`).join("")}</tr>`; }
 function money(n){return "₱"+Number(n||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});}
 function toast(m){const t=document.getElementById("toast");t.textContent=m;t.classList.add("show");setTimeout(()=>t.classList.remove("show"),2200);}
 function clearErr(id){document.getElementById("err-"+id).textContent="";document.getElementById(id).classList.remove("err");}
@@ -52,7 +54,8 @@ async function boot(){
   const today=new Date(), firstOfMonth=new Date(today.getFullYear(),today.getMonth(),1).toISOString().slice(0,10), todayStr=today.toISOString().slice(0,10);
   document.getElementById("isStart").value=firstOfMonth; document.getElementById("isEnd").value=todayStr;
   document.getElementById("soeStart").value=firstOfMonth; document.getElementById("soeEnd").value=todayStr;
-  renderIncomeStatement(); renderSOE();
+  document.getElementById("cfStart").value=firstOfMonth; document.getElementById("cfEnd").value=todayStr;
+  renderIncomeStatement(); renderSOE(); renderCashFlow();
 }
 async function loadAll(){
   const [a,t,j]=await Promise.all([
@@ -72,6 +75,7 @@ document.querySelectorAll("nav .tab").forEach(btn=>btn.addEventListener("click",
   document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));
   btn.classList.add("active"); document.getElementById("view-"+btn.dataset.view).classList.add("active");
   if(btn.dataset.view==="dash") renderDashboard();
+  if(btn.dataset.view==="cf") renderCashFlow();
 }));
 
 // ---------- Chart of Accounts ----------
@@ -305,7 +309,7 @@ function addLineRow(wrapId,barId){
 document.getElementById("addJeLineBtn").addEventListener("click", ()=>addLineRow("jeLines","jeBalanceBar"));
 function lineRowAmounts(wrapId){
   let debit=0,credit=0;
-  document.querySelectorAll("#"+wrapId+" > div").forEach(r=>{ debit+=parseFloat(r.querySelector(".lineDebitInp").value)||0; credit+=parseFloat(r.querySelector(".lineCreditInp").value)||0; });
+  document.querySelectorAll("#"+wrapId+" > div").forEach(r=>{ debit+=num(r.querySelector(".lineDebitInp").value); credit+=num(r.querySelector(".lineCreditInp").value); });
   return {debit,credit};
 }
 function updateLineBalanceBar(wrapId,barId){
@@ -319,7 +323,7 @@ document.getElementById("postJeBtn").addEventListener("click", async ()=>{
   if(!txnId){ setErr("jeTxnSelect","Pick a transaction first."); bad=true; }
   const linesToInsert=[];
   document.querySelectorAll("#jeLines > div").forEach(r=>{
-    const accId=r.querySelector(".lineAcctSel").value, dv=parseFloat(r.querySelector(".lineDebitInp").value)||0, cv=parseFloat(r.querySelector(".lineCreditInp").value)||0;
+    const accId=r.querySelector(".lineAcctSel").value, dv=num(r.querySelector(".lineDebitInp").value), cv=num(r.querySelector(".lineCreditInp").value);
     if(accId&&(dv>0||cv>0)) linesToInsert.push({owner_id:user.id, transaction_id:txnId, account_id:accId, debit:dv, credit:cv});
   });
   if(linesToInsert.length<2){ document.getElementById("err-jeLines").textContent="Add at least two complete lines."; bad=true; }
@@ -377,6 +381,7 @@ function renderTrialBalance(){
     tbody.appendChild(tr);
   });
   if(!tbody.children.length) tbody.innerHTML='<tr><td colspan="5" class="empty">Post a journal entry to see your trial balance.</td></tr>';
+  document.querySelector("#tbTable tfoot").innerHTML=totalsRow("Totals",3,[totD,totC]);
   const bar=document.getElementById("tbBalanceBar"); const diff=Math.round((totD-totC)*100)/100;
   bar.textContent=`Total debits ${money(totD)} · Total credits ${money(totC)}`+(diff===0?" · Balanced ✓":` · Out of balance by ${money(Math.abs(diff))}`);
   bar.style.color = diff===0 ? "var(--good)" : "var(--bad)";
@@ -420,7 +425,7 @@ document.getElementById("postAdjBtn").addEventListener("click", async ()=>{
   if(!commentEl.value.trim()){ document.getElementById("err-adjLines").textContent="An explanation is required for adjusting entries."; bad=true; }
   const lines=[];
   document.querySelectorAll("#adjLines > div").forEach(r=>{
-    const accId=r.querySelector(".lineAcctSel").value, dv=parseFloat(r.querySelector(".lineDebitInp").value)||0, cv=parseFloat(r.querySelector(".lineCreditInp").value)||0;
+    const accId=r.querySelector(".lineAcctSel").value, dv=num(r.querySelector(".lineDebitInp").value), cv=num(r.querySelector(".lineCreditInp").value);
     if(accId&&(dv>0||cv>0)) lines.push({account_id:accId, debit:dv, credit:cv});
   });
   if(lines.length<2){ document.getElementById("err-adjLines").textContent="Add at least two complete lines."; bad=true; }
@@ -482,7 +487,9 @@ function renderAdjustedTrialBalance(){
     const ud=uLines.reduce((s,l)=>s+Number(l.debit),0), uc=uLines.reduce((s,l)=>s+Number(l.credit),0);
     const ad=aLines.reduce((s,l)=>s+Number(l.debit),0), ac=aLines.reduce((s,l)=>s+Number(l.credit),0);
     if(ud===0&&uc===0&&ad===0&&ac===0) return;
-    const U=netToCols(ud,uc,a.normal_balance), A=netToCols(ad,ac,a.normal_balance), F=netToCols(ud+ad,uc+ac,a.normal_balance);
+    // Adjustments column shows gross debits/credits (like a worksheet) instead of netting them per account,
+    // so its total always equals the sum of all adjusting entries.
+    const U=netToCols(ud,uc,a.normal_balance), A={debitCol:ad,creditCol:ac}, F=netToCols(ud+ad,uc+ac,a.normal_balance);
     totU_d+=U.debitCol; totU_c+=U.creditCol; totA_d+=A.debitCol; totA_c+=A.creditCol; totF_d+=F.debitCol; totF_c+=F.creditCol;
     const tr=document.createElement("tr");
     tr.innerHTML=`<td>${esc(a.account_number)}</td><td>${esc(a.account_name)}</td><td><span class="pill">${a.account_type}</span></td>
@@ -492,6 +499,7 @@ function renderAdjustedTrialBalance(){
     tbody.appendChild(tr);
   });
   if(!tbody.children.length) tbody.innerHTML='<tr><td colspan="9" class="empty">Post a transaction to see your adjusted trial balance.</td></tr>';
+  document.querySelector("#atbTable tfoot").innerHTML=totalsRow("Totals",3,[totU_d,totU_c,totA_d,totA_c,totF_d,totF_c]);
   const bar=document.getElementById("atbBalanceBar"); const diff=Math.round((totF_d-totF_c)*100)/100;
   bar.textContent=`Unadjusted ${money(totU_d)} / ${money(totU_c)} · Adjustments ${money(totA_d)} / ${money(totA_c)} · Adjusted ${money(totF_d)} / ${money(totF_c)}`+(diff===0?" · Balanced ✓":` · Out of balance by ${money(Math.abs(diff))}`);
   bar.style.color = diff===0 ? "var(--good)" : "var(--bad)";
@@ -585,6 +593,60 @@ function renderSOE(){
 }
 document.getElementById("soeStart").addEventListener("change", renderSOE);
 document.getElementById("soeEnd").addEventListener("change", renderSOE);
+
+// ---------- Cash Flow (direct method) ----------
+// Cash accounts = Asset accounts named like cash/bank. Each entry's cash change is attributed to the
+// non-cash accounts on the opposite side, in proportion, then grouped by activity.
+function isCashAccount(a){ return a.account_type==="Asset" && /cash|bank|petty/i.test(a.account_name); }
+function cfActivity(a){
+  if(!a) return "Operating";
+  if(a.account_type==="Equity") return "Financing";
+  if(a.account_type==="Liability" && /note|loan|mortgage|bond|borrow/i.test(a.account_name)) return "Financing";
+  if(a.account_type==="Asset" && /equipment|furniture|fixture|building|land|vehicle|truck|machin|property|investment|computer|tools/i.test(a.account_name)) return "Investing";
+  return "Operating";
+}
+function renderCashFlow(){
+  const out=document.getElementById("cfOutput"), bar=document.getElementById("cfBalanceBar");
+  const start=document.getElementById("cfStart").value, end=document.getElementById("cfEnd").value;
+  if(!start||!end){ out.innerHTML='<p class="empty">Pick a start and end date.</p>'; bar.style.display="none"; return; }
+  const byId=Object.fromEntries(accounts.map(a=>[a.id,a]));
+  const cashIds=new Set(accounts.filter(isCashAccount).map(a=>a.id));
+  if(!cashIds.size){ out.innerHTML='<p class="empty">Add an Asset account with "Cash" or "Bank" in its name to build the cash flow statement.</p>'; bar.style.display="none"; return; }
+  const cashChange=l=>Number(l.debit)-Number(l.credit);
+  let beginning=0; journalEntries.forEach(l=>{ const t=transactions.find(x=>x.id===l.transaction_id); if(t&&t.date<start&&cashIds.has(l.account_id)) beginning+=cashChange(l); });
+  const groups={Operating:{},Investing:{},Financing:{}};
+  transactions.filter(t=>t.date>=start&&t.date<=end).forEach(t=>{
+    const lines=journalEntries.filter(j=>j.transaction_id===t.id);
+    const change=lines.filter(l=>cashIds.has(l.account_id)).reduce((s,l)=>s+cashChange(l),0);
+    if(Math.abs(change)<0.005) return;
+    // inflow -> came from credited non-cash accounts; outflow -> went to debited non-cash accounts
+    const side=l=>change>0?Number(l.credit):Number(l.debit);
+    const others=lines.filter(l=>!cashIds.has(l.account_id)&&side(l)>0), base=others.reduce((s,l)=>s+side(l),0);
+    others.forEach(l=>{
+      const a=byId[l.account_id], share=change*side(l)/base, g=groups[cfActivity(a)], key=l.account_id+(share>0?"+":"-");
+      g[key]=g[key]||{name:a?a.account_name:"(deleted account)",amt:0}; g[key].amt+=share;
+    });
+  });
+  const row=(label,amt,strong)=>`<tr><td>${strong?`<strong>${label}</strong>`:label}</td><td style="text-align:right">${strong?`<strong>${money(amt)}</strong>`:money(amt)}</td></tr>`;
+  let html="", net=0;
+  [["Operating","operating"],["Investing","investing"],["Financing","financing"]].forEach(([k,word])=>{
+    const items=Object.values(groups[k]).filter(i=>Math.abs(i.amt)>=0.005).sort((a,b)=>b.amt-a.amt);
+    const sub=items.reduce((s,i)=>s+i.amt,0); net+=sub;
+    html+=`<table style="margin-top:14px"><thead><tr><th>Cash flows from ${word} activities</th><th></th></tr></thead><tbody>
+      ${items.map(i=>row(`${i.amt>0?"Cash received from":"Cash paid for"} ${esc(i.name)}`,i.amt)).join("")||'<tr><td colspan="2" style="color:var(--muted)">None</td></tr>'}
+      ${row(`Net cash ${sub<0?"used in":"provided by"} ${word} activities`,sub,true)}</tbody></table>`;
+  });
+  html+=`<table style="margin-top:14px"><tbody>${row(`Net ${net<0?"decrease":"increase"} in cash`,net,true)}${row("Cash at beginning of period",beginning)}${row("Cash at end of period",beginning+net,true)}</tbody></table>`;
+  out.innerHTML=`<p class="sub">For the period ${fmtDate(start)} – ${fmtDate(end)}</p>`+html;
+  // Cross-check against the ledger's cash balance at the end date
+  let ledgerEnd=0; journalEntries.forEach(l=>{ const t=transactions.find(x=>x.id===l.transaction_id); if(t&&t.date<=end&&cashIds.has(l.account_id)) ledgerEnd+=cashChange(l); });
+  const ok=Math.round((ledgerEnd-beginning-net)*100)===0;
+  bar.style.display="block";
+  bar.textContent=`Cash accounts: ${accounts.filter(isCashAccount).map(a=>a.account_name).join(", ")} · Ledger cash balance on ${fmtDate(end)}: ${money(ledgerEnd)}`+(ok?" · Matches ✓":" · Does not match");
+  bar.style.color=ok?"var(--good)":"var(--bad)";
+}
+document.getElementById("cfStart").addEventListener("change", renderCashFlow);
+document.getElementById("cfEnd").addEventListener("change", renderCashFlow);
 
 // ---------- Export to Excel ----------
 document.getElementById("exportBtn").addEventListener("click", ()=>{

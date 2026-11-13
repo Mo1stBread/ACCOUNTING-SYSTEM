@@ -42,6 +42,7 @@
     <button class="tab" data-view="atb">Adjusted Trial Balance</button>
     <button class="tab" data-view="is">Income Statement</button>
     <button class="tab" data-view="soe">Statement of Owner's Equity</button>
+    <button class="tab" data-view="cf">Cash Flow</button>
   </nav>
 </header>
 <main>
@@ -129,7 +130,7 @@
     <div class="card">
       <h2>Trial balance</h2>
       <p class="sub">Recalculates automatically from every posted (non-adjusting) journal entry.</p>
-      <div class="tablewrap"><table id="tbTable"><thead><tr><th>Number</th><th>Account</th><th>Type</th><th style="text-align:right">Debit</th><th style="text-align:right">Credit</th></tr></thead><tbody></tbody></table></div>
+      <div class="tablewrap"><table id="tbTable"><thead><tr><th>Number</th><th>Account</th><th>Type</th><th style="text-align:right">Debit</th><th style="text-align:right">Credit</th></tr></thead><tbody></tbody><tfoot></tfoot></table></div>
       <div class="balancebar" id="tbBalanceBar" style="margin-top:10px;padding:10px 12px;border-radius:8px;background:var(--surface-2)"></div>
     </div>
   </section>
@@ -166,7 +167,7 @@
         <tr><th rowspan="2">Number</th><th rowspan="2">Account</th><th rowspan="2">Type</th>
           <th colspan="2" style="text-align:center">Unadjusted</th><th colspan="2" style="text-align:center">Adjustments</th><th colspan="2" style="text-align:center">Adjusted</th></tr>
         <tr><th style="text-align:right">Debit</th><th style="text-align:right">Credit</th><th style="text-align:right">Debit</th><th style="text-align:right">Credit</th><th style="text-align:right">Debit</th><th style="text-align:right">Credit</th></tr>
-      </thead><tbody></tbody></table></div>
+      </thead><tbody></tbody><tfoot></tfoot></table></div>
       <div class="balancebar" id="atbBalanceBar" style="margin-top:10px;padding:10px 12px;border-radius:8px;background:var(--surface-2)"></div>
       <div id="atbMissing" style="display:none;margin-top:10px;padding:10px 12px;border-radius:8px;background:var(--bad-soft);color:var(--bad);font-size:12.5px"></div>
     </div>
@@ -192,6 +193,19 @@
         <div class="field"><label>To</label><input type="date" id="soeEnd"></div>
       </div>
       <div id="soeOutput" style="margin-top:14px"></div>
+    </div>
+  </section>
+
+  <section class="view" id="view-cf">
+    <div class="card">
+      <h2>Statement of cash flows</h2>
+      <p class="sub">Direct method, from every entry that touches a cash account (Asset accounts named Cash, Bank or Petty cash). Capital, drawings and loans/notes are financing; equipment, furniture, buildings, land and vehicles are investing; everything else is operating.</p>
+      <div class="row">
+        <div class="field"><label>From</label><input type="date" id="cfStart"></div>
+        <div class="field"><label>To</label><input type="date" id="cfEnd"></div>
+      </div>
+      <div id="cfOutput" style="margin-top:14px"></div>
+      <div class="balancebar" id="cfBalanceBar" style="display:none;margin-top:10px;padding:10px 12px;border-radius:8px;background:var(--surface-2)"></div>
     </div>
   </section>
 
