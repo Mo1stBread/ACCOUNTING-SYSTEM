@@ -10,30 +10,31 @@
 <body>
 
 <div id="authScreen">
-  <div class="card">
-    <h2>Sign in to Ledgerline</h2>
+  <form class="card" id="authForm" novalidate>
+    <div class="brand"><div class="mark" aria-hidden="true">$</div><div><h1>Ledgerline</h1><p>Accounting for your business</p></div></div>
+    <h2>Sign in</h2>
     <p class="sub">You must be signed in to use this system — your data is private to your account.</p>
-    <div class="field"><label>Email</label><input id="authEmail" type="email"></div>
-    <div class="field" style="margin-top:8px"><label>Password</label><input id="authPass" type="password"></div>
-    <div class="errtext" id="authErr"></div>
-    <div class="row" style="margin-top:10px">
-      <button class="btn" id="authSignIn">Sign in</button>
-      <button class="btn ghost" id="authSignUp">Create account</button>
+    <div class="field"><label for="authEmail">Email</label><input id="authEmail" type="email" autocomplete="email" required></div>
+    <div class="field"><label for="authPass">Password</label><input id="authPass" type="password" autocomplete="current-password" minlength="6" required></div>
+    <div class="errtext" id="authErr" role="alert" style="margin-top:8px"></div>
+    <div class="actions">
+      <button type="submit" class="btn" id="authSignIn">Sign in</button>
+      <button type="button" class="btn ghost" id="authSignUp">Create account</button>
     </div>
-  </div>
+  </form>
 </div>
 
 <div id="appScreen" style="display:none">
 <header>
   <div class="headrow">
-    <div class="brand"><div class="mark">$</div><div><h1>Ledgerline</h1><p>Accounting for your business</p></div></div>
+    <div class="brand"><div class="mark" aria-hidden="true">$</div><div><h1>Ledgerline</h1><p>Accounting for your business</p></div></div>
     <div class="ctl">
       <button class="btn ghost" id="exportBtn">Export to Excel</button>
       <button class="btn ghost" id="signOutBtn">Sign out</button>
     </div>
   </div>
-  <nav id="mainNav">
-    <button class="tab active" data-view="dash">Dashboard</button>
+  <nav id="mainNav" aria-label="Sections">
+    <button class="tab active" data-view="dash" aria-current="page">Dashboard</button>
     <button class="tab" data-view="coa">Chart of Accounts</button>
     <button class="tab" data-view="txn">Transactions</button>
     <button class="tab" data-view="je">Journal Entries</button>
@@ -41,7 +42,7 @@
     <button class="tab" data-view="adj">Adjusting Entries</button>
     <button class="tab" data-view="atb">Adjusted Trial Balance</button>
     <button class="tab" data-view="is">Income Statement</button>
-    <button class="tab" data-view="soe">Statement of Owner's Equity</button>
+    <button class="tab" data-view="soe">Owner's Equity</button>
     <button class="tab" data-view="cf">Cash Flow</button>
   </nav>
 </header>
@@ -62,7 +63,7 @@
       <h2>Recorded vs. pending</h2>
       <p class="sub">Share of all transactions that have balanced journal entries posted.</p>
       <div class="donutwrap">
-        <div class="donut" id="donutChart"></div>
+        <div class="donut" id="donutChart" role="img" aria-label="Recorded vs. pending chart"></div>
         <div class="donutlegend" id="donutLegend"></div>
       </div>
     </div>
@@ -74,91 +75,99 @@
       <h2>Add an account</h2>
       <p class="sub">Normal balance is set automatically based on the account type.</p>
       <div class="row">
-        <div class="field"><label>Account number</label><input id="coaNumber"><div class="errtext" id="err-coaNumber"></div></div>
-        <div class="field" style="flex:2"><label>Account name</label><input id="coaName"><div class="errtext" id="err-coaName"></div></div>
-        <div class="field"><label>Type</label><select id="coaType"><option>Asset</option><option>Liability</option><option>Equity</option><option>Revenue</option><option>Expense</option></select></div>
+        <div class="field"><label for="coaNumber">Account number</label><input id="coaNumber" inputmode="numeric" placeholder="e.g. 101"><div class="errtext" id="err-coaNumber"></div></div>
+        <div class="field wide"><label for="coaName">Account name</label><input id="coaName" placeholder="e.g. Cash"><div class="errtext" id="err-coaName"></div></div>
+        <div class="field"><label for="coaType">Type</label><select id="coaType"><option>Asset</option><option>Liability</option><option>Equity</option><option>Revenue</option><option>Expense</option></select></div>
       </div>
-      <div class="field" style="margin-top:8px"><label>Description (optional)</label><input id="coaDesc"></div>
-      <div style="margin-top:12px"><button class="btn" id="addAccountBtn">Add account</button></div>
+      <div class="field" style="margin-top:4px"><label for="coaDesc">Description (optional)</label><input id="coaDesc"></div>
+      <div class="actions"><button class="btn" id="addAccountBtn">Add account</button></div>
     </div>
     <div class="card"><h2>Your accounts</h2>
-      <div class="tablewrap"><table id="coaTable"><thead><tr><th>Number</th><th>Name</th><th>Description</th><th>Type</th><th>Normal balance</th><th></th></tr></thead><tbody></tbody></table></div>
+      <div class="tablewrap"><table id="coaTable"><thead><tr><th>Number</th><th>Name</th><th>Description</th><th>Type</th><th>Normal balance</th><th><span class="sr-only">Actions</span></th></tr></thead><tbody></tbody></table></div>
       <div class="empty" id="coaEmpty" style="display:none">No accounts yet. Add your first one above.</div>
     </div>
   </section>
 
-  <!-- PLACEHOLDERS FOR LATER PHASES -->
+  <!-- TRANSACTIONS -->
   <section class="view" id="view-txn">
     <div class="card">
       <h2>New transaction</h2>
-      <p class="sub">Create the header first, then switch to Journal Entries to post its debit/credit lines. Status becomes Recorded automatically once those lines balance.</p>
+      <p class="sub">Create the header first, then post its debit/credit lines under Journal Entries. Status becomes Recorded automatically once those lines balance.</p>
       <div class="row">
-        <div class="field"><label>Date</label><input type="date" id="txnDate"><div class="errtext" id="err-txnDate"></div></div>
-        <div class="field" style="flex:2"><label>Description</label><input id="txnDesc" placeholder="e.g. Owner invested ₱100,000 cash in business"><div class="errtext" id="err-txnDesc"></div></div>
+        <div class="field"><label for="txnDate">Date</label><input type="date" id="txnDate"><div class="errtext" id="err-txnDate"></div></div>
+        <div class="field wide"><label for="txnDesc">Description</label><input id="txnDesc" placeholder="e.g. Owner invested ₱100,000 cash in business"><div class="errtext" id="err-txnDesc"></div></div>
       </div>
-      <div style="margin-top:10px"><button class="btn" id="createTxnBtn">Create transaction</button></div>
+      <div class="actions"><button class="btn" id="createTxnBtn">Create transaction</button></div>
     </div>
     <div class="card"><h2>All transactions</h2>
-      <div class="tablewrap"><table id="txnTable"><thead><tr><th>Date</th><th>Description</th><th>Status</th><th></th></tr></thead><tbody></tbody></table></div>
+      <div class="tablewrap"><table id="txnTable"><thead><tr><th>Date</th><th>Description</th><th>Status</th><th><span class="sr-only">Actions</span></th></tr></thead><tbody></tbody></table></div>
       <div class="empty" id="txnEmpty" style="display:none">No transactions yet.</div>
-      <div id="txnDetail" style="display:none;margin-top:12px;padding:12px;background:var(--surface-2);border-radius:8px"></div>
+      <div id="txnDetail" class="detailbox" style="display:none"></div>
     </div>
     <div class="card"><h2>View by account</h2>
       <p class="sub">Click an account to see every journal entry posted against it.</p>
-      <div class="row" id="accountChips"></div>
-      <div id="accountLedger" style="margin-top:14px"></div>
+      <div class="chips" id="accountChips"></div>
+      <div id="accountLedger" style="margin-top:16px"></div>
     </div>
   </section>
+
+  <!-- JOURNAL ENTRIES -->
   <section class="view" id="view-je">
     <div class="card">
       <h2>Post a journal entry</h2>
       <p class="sub">Pick the transaction this entry belongs to, then add its debit/credit lines.</p>
-      <div class="field"><label>Transaction</label><select id="jeTxnSelect"></select><div class="errtext" id="err-jeTxnSelect"></div></div>
-      <div id="jeTxnStatus" style="margin:8px 0;font-size:13px;color:var(--ink-2)"></div>
+      <div class="field"><label for="jeTxnSelect">Transaction</label><select id="jeTxnSelect"></select><div class="errtext" id="err-jeTxnSelect"></div></div>
+      <p class="statusline" id="jeTxnStatus"></p>
+      <div class="linehead" aria-hidden="true"><span>Account</span><span>Debit</span><span>Credit</span><span></span></div>
       <div id="jeLines"></div>
-      <button class="btn ghost" id="addJeLineBtn">+ Add line</button>
-      <div class="balancebar" id="jeBalanceBar" style="margin-top:10px;padding:10px 12px;border-radius:8px;background:var(--surface-2)"></div>
-      <div class="errtext" id="err-jeLines"></div>
-      <div style="margin-top:10px"><button class="btn" id="postJeBtn">Post entry</button></div>
+      <button class="btn ghost sm" id="addJeLineBtn">+ Add line</button>
+      <div class="balancebar" id="jeBalanceBar" aria-live="polite"></div>
+      <div class="errtext" id="err-jeLines" role="alert"></div>
+      <div class="actions"><button class="btn" id="postJeBtn">Post entry</button></div>
     </div>
     <div class="card"><h2>All journal entries</h2>
-      <div class="tablewrap"><table id="jeTable"><thead><tr><th>Transaction</th><th>Account</th><th style="text-align:right">Debit</th><th style="text-align:right">Credit</th><th></th></tr></thead><tbody></tbody></table></div>
+      <div class="tablewrap"><table id="jeTable"><thead><tr><th>Transaction</th><th>Account</th><th class="num">Debit</th><th class="num">Credit</th><th><span class="sr-only">Actions</span></th></tr></thead><tbody></tbody></table></div>
       <div class="empty" id="jeEmpty" style="display:none">No journal entries yet.</div>
     </div>
   </section>
+
+  <!-- TRIAL BALANCE -->
   <section class="view" id="view-tb">
     <div class="card">
       <h2>Trial balance</h2>
       <p class="sub">Recalculates automatically from every posted (non-adjusting) journal entry.</p>
-      <div class="tablewrap"><table id="tbTable"><thead><tr><th>Number</th><th>Account</th><th>Type</th><th style="text-align:right">Debit</th><th style="text-align:right">Credit</th></tr></thead><tbody></tbody><tfoot></tfoot></table></div>
-      <div class="balancebar" id="tbBalanceBar" style="margin-top:10px;padding:10px 12px;border-radius:8px;background:var(--surface-2)"></div>
+      <div class="tablewrap"><table id="tbTable"><thead><tr><th>Number</th><th>Account</th><th>Type</th><th class="num">Debit</th><th class="num">Credit</th></tr></thead><tbody></tbody><tfoot></tfoot></table></div>
+      <div class="balancebar" id="tbBalanceBar"></div>
     </div>
   </section>
 
+  <!-- ADJUSTING ENTRIES -->
   <section class="view" id="view-adj">
     <div class="card">
       <h2 id="adjFormTitle">New adjusting entry</h2>
-      <p class="sub">An explanation is required — this is the comment that will show in the list below.</p>
+      <p class="sub">An explanation is required — it's shown as the comment in the list below.</p>
       <div class="row">
-        <div class="field"><label>Date</label><input type="date" id="adjDate"><div class="errtext" id="err-adjDate"></div></div>
-        <div class="field" style="flex:2"><label>Description</label><input id="adjDesc"><div class="errtext" id="err-adjDesc"></div></div>
+        <div class="field"><label for="adjDate">Date</label><input type="date" id="adjDate"><div class="errtext" id="err-adjDate"></div></div>
+        <div class="field wide"><label for="adjDesc">Description</label><input id="adjDesc"><div class="errtext" id="err-adjDesc"></div></div>
       </div>
-      <div class="field" style="margin-top:8px"><label>Explanation (required)</label><textarea id="adjComment" rows="2" placeholder="e.g. Accrue October rent not yet invoiced"></textarea></div>
-      <div id="adjLines" style="margin-top:10px"></div>
-      <button class="btn ghost" id="addAdjLineBtn">+ Add line</button>
-      <div class="balancebar" id="adjBalanceBar" style="margin-top:10px;padding:10px 12px;border-radius:8px;background:var(--surface-2)"></div>
-      <div class="errtext" id="err-adjLines"></div>
-      <div class="row" style="margin-top:10px">
+      <div class="field" style="margin-top:4px"><label for="adjComment">Explanation (required)</label><textarea id="adjComment" rows="2" placeholder="e.g. Accrue October rent not yet invoiced"></textarea></div>
+      <div class="linehead" aria-hidden="true"><span>Account</span><span>Debit</span><span>Credit</span><span></span></div>
+      <div id="adjLines"></div>
+      <button class="btn ghost sm" id="addAdjLineBtn">+ Add line</button>
+      <div class="balancebar" id="adjBalanceBar" aria-live="polite"></div>
+      <div class="errtext" id="err-adjLines" role="alert"></div>
+      <div class="actions">
         <button class="btn" id="postAdjBtn">Post adjusting entry</button>
         <button class="btn ghost" id="cancelAdjEditBtn" style="display:none">Cancel edit</button>
       </div>
     </div>
     <div class="card"><h2>Adjusting entries</h2>
-      <div class="tablewrap"><table id="adjTable"><thead><tr><th>Date</th><th>Description</th><th>Explanation</th><th>Status</th><th></th></tr></thead><tbody></tbody></table></div>
+      <div class="tablewrap"><table id="adjTable"><thead><tr><th>Date</th><th>Description</th><th>Explanation</th><th>Status</th><th><span class="sr-only">Actions</span></th></tr></thead><tbody></tbody></table></div>
       <div class="empty" id="adjEmpty" style="display:none">No adjusting entries yet.</div>
     </div>
   </section>
 
+  <!-- ADJUSTED TRIAL BALANCE -->
   <section class="view" id="view-atb">
     <div class="card">
       <h2>Adjusted trial balance</h2>
@@ -166,52 +175,56 @@
       <div class="tablewrap"><table id="atbTable"><thead>
         <tr><th rowspan="2">Number</th><th rowspan="2">Account</th><th rowspan="2">Type</th>
           <th colspan="2" style="text-align:center">Unadjusted</th><th colspan="2" style="text-align:center">Adjustments</th><th colspan="2" style="text-align:center">Adjusted</th></tr>
-        <tr><th style="text-align:right">Debit</th><th style="text-align:right">Credit</th><th style="text-align:right">Debit</th><th style="text-align:right">Credit</th><th style="text-align:right">Debit</th><th style="text-align:right">Credit</th></tr>
+        <tr><th class="num">Debit</th><th class="num">Credit</th><th class="num">Debit</th><th class="num">Credit</th><th class="num">Debit</th><th class="num">Credit</th></tr>
       </thead><tbody></tbody><tfoot></tfoot></table></div>
-      <div class="balancebar" id="atbBalanceBar" style="margin-top:10px;padding:10px 12px;border-radius:8px;background:var(--surface-2)"></div>
-      <div id="atbMissing" style="display:none;margin-top:10px;padding:10px 12px;border-radius:8px;background:var(--bad-soft);color:var(--bad);font-size:12.5px"></div>
+      <div class="balancebar" id="atbBalanceBar"></div>
+      <div class="notice" id="atbMissing" style="display:none"></div>
     </div>
   </section>
+
+  <!-- INCOME STATEMENT -->
   <section class="view" id="view-is">
     <div class="card">
       <h2>Income statement</h2>
       <p class="sub">Includes both regular and adjusting entries for the period you choose.</p>
       <div class="row">
-        <div class="field"><label>From</label><input type="date" id="isStart"></div>
-        <div class="field"><label>To</label><input type="date" id="isEnd"></div>
+        <div class="field"><label for="isStart">From</label><input type="date" id="isStart"></div>
+        <div class="field"><label for="isEnd">To</label><input type="date" id="isEnd"></div>
       </div>
-      <div id="isOutput" style="margin-top:14px"></div>
+      <div id="isOutput" class="stmt" style="margin-top:16px"></div>
     </div>
   </section>
 
+  <!-- OWNER'S EQUITY -->
   <section class="view" id="view-soe">
     <div class="card">
       <h2>Statement of owner's equity</h2>
       <p class="sub">Equity accounts with "drawing" in the name are treated as owner withdrawals; all other equity accounts count as capital.</p>
       <div class="row">
-        <div class="field"><label>From</label><input type="date" id="soeStart"></div>
-        <div class="field"><label>To</label><input type="date" id="soeEnd"></div>
+        <div class="field"><label for="soeStart">From</label><input type="date" id="soeStart"></div>
+        <div class="field"><label for="soeEnd">To</label><input type="date" id="soeEnd"></div>
       </div>
-      <div id="soeOutput" style="margin-top:14px"></div>
+      <div id="soeOutput" class="stmt" style="margin-top:16px"></div>
     </div>
   </section>
 
+  <!-- CASH FLOW -->
   <section class="view" id="view-cf">
     <div class="card">
       <h2>Statement of cash flows</h2>
       <p class="sub">Direct method, from every entry that touches a cash account (Asset accounts named Cash, Bank or Petty cash). Capital, drawings and loans/notes are financing; equipment, furniture, buildings, land and vehicles are investing; everything else is operating.</p>
       <div class="row">
-        <div class="field"><label>From</label><input type="date" id="cfStart"></div>
-        <div class="field"><label>To</label><input type="date" id="cfEnd"></div>
+        <div class="field"><label for="cfStart">From</label><input type="date" id="cfStart"></div>
+        <div class="field"><label for="cfEnd">To</label><input type="date" id="cfEnd"></div>
       </div>
-      <div id="cfOutput" style="margin-top:14px"></div>
-      <div class="balancebar" id="cfBalanceBar" style="display:none;margin-top:10px;padding:10px 12px;border-radius:8px;background:var(--surface-2)"></div>
+      <div id="cfOutput" class="stmt" style="margin-top:16px"></div>
+      <div class="balancebar" id="cfBalanceBar" style="display:none"></div>
     </div>
   </section>
 
 </main>
 </div>
-<div class="toast" id="toast"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="app.js"></script>

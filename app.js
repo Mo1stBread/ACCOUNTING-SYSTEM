@@ -14,11 +14,20 @@ function num(v){return parseFloat(String(v).replace(/[,\s₱]/g,""))||0;} // "44
 function totalsRow(label,span,vals){ return `<tr class="totals"><td colspan="${span}">${label}</td>${vals.map(v=>`<td style="text-align:right">${money(v)}</td>`).join("")}</tr>`; }
 function money(n){return "₱"+Number(n||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});}
 function toast(m){const t=document.getElementById("toast");t.textContent=m;t.classList.add("show");setTimeout(()=>t.classList.remove("show"),2200);}
+const ICONS={
+  eye:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>',
+  x:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>',
+  trash:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6"/></svg>',
+  edit:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>'
+};
+function iconBtn(icon,label,attrs,danger){ return `<button class="iconbtn${danger?" danger":""}" ${attrs} title="${label}" aria-label="${label}">${ICONS[icon]}</button>`; }
+function setBar(bar,state){ bar.classList.remove("good","bad"); if(state) bar.classList.add(state); }
 function clearErr(id){document.getElementById("err-"+id).textContent="";document.getElementById(id).classList.remove("err");}
 function setErr(id,m){document.getElementById("err-"+id).textContent=m;document.getElementById(id).classList.add("err");}
 
 // ---------- Auth ----------
-document.getElementById("authSignIn").addEventListener("click", async ()=>{
+document.getElementById("authForm").addEventListener("submit", async (e)=>{
+  e.preventDefault();
   const email=document.getElementById("authEmail").value.trim(), pass=document.getElementById("authPass").value;
   const {error}=await sb.auth.signInWithPassword({email,password:pass});
   if(error) document.getElementById("authErr").textContent=error.message;
@@ -34,7 +43,7 @@ document.getElementById("signOutBtn").addEventListener("click", async ()=>{ awai
 sb.auth.onAuthStateChange((event, session)=>{
   user = session ? session.user : null;
   if(user){ document.getElementById("authScreen").style.display="none"; document.getElementById("appScreen").style.display="block"; boot(); }
-  else{ document.getElementById("authScreen").style.display="block"; document.getElementById("appScreen").style.display="none"; }
+  else{ document.getElementById("authScreen").style.display="flex"; document.getElementById("appScreen").style.display="none"; }
 });
 
 // ---------- Data layer ----------
@@ -70,13 +79,14 @@ async function loadAll(){
 }
 
 // ---------- Tabs ----------
-document.querySelectorAll("nav .tab").forEach(btn=>btn.addEventListener("click",()=>{
-  document.querySelectorAll("nav .tab").forEach(b=>b.classList.remove("active"));
-  document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));
-  btn.classList.add("active"); document.getElementById("view-"+btn.dataset.view).classList.add("active");
-  if(btn.dataset.view==="dash") renderDashboard();
-  if(btn.dataset.view==="cf") renderCashFlow();
-}));
+function showView(view){
+  document.querySelectorAll("nav .tab").forEach(b=>{ const on=b.dataset.view===view; b.classList.toggle("active",on); if(on){ b.setAttribute("aria-current","page"); b.scrollIntoView({block:"nearest",inline:"nearest"}); } else b.removeAttribute("aria-current"); });
+  document.querySelectorAll(".view").forEach(v=>v.classList.toggle("active",v.id==="view-"+view));
+  if(view==="dash") renderDashboard();
+  if(view==="cf") renderCashFlow();
+  window.scrollTo(0,0);
+}
+document.querySelectorAll("nav .tab").forEach(btn=>btn.addEventListener("click",()=>showView(btn.dataset.view)));
 
 // ---------- Chart of Accounts ----------
 document.getElementById("addAccountBtn").addEventListener("click", async ()=>{
@@ -103,11 +113,11 @@ function renderAccounts(){
     const used=accountHasEntries(a.id); const tr=document.createElement("tr");
     tr.innerHTML=`<td>${esc(a.account_number)}</td><td>${esc(a.account_name)}</td><td style="color:var(--muted)">${esc(a.description||"—")}</td>
       <td><span class="pill">${a.account_type}</span></td>
-      <td><select class="nbSel" data-nb="${a.id}" style="padding:4px 8px;font-size:12px">
+      <td><select class="nbSel" data-nb="${a.id}" aria-label="Normal balance for ${esc(a.account_name)}" style="min-height:34px;padding:4px 8px;font-size:13px;width:auto">
         <option value="Debit" ${a.normal_balance==='Debit'?'selected':''}>Debit</option>
         <option value="Credit" ${a.normal_balance==='Credit'?'selected':''}>Credit</option>
       </select></td>
-      <td><button class="iconbtn" data-del="${a.id}" ${used?'disabled':''} title="${used?'Used in journal entries':'Delete'}">✕</button></td>`;
+      <td class="actionscell">${iconBtn("trash",used?"Can't delete — used in journal entries":"Delete account",`data-del="${a.id}" ${used?'disabled':''}`,true)}</td>`;
     tbody.appendChild(tr);
   });
   tbody.querySelectorAll("[data-del]").forEach(b=>b.addEventListener("click", async ()=>{
@@ -200,10 +210,7 @@ document.getElementById("createTxnBtn").addEventListener("click", async ()=>{
   transactions.push(data); descEl.value="";
   renderTransactionsTab(); renderDashboard(); populateJeTxnSelect();
   toast("Transaction created — now add its journal entries below");
-  document.querySelectorAll("nav .tab").forEach(b=>b.classList.remove("active"));
-  document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));
-  document.querySelector('nav .tab[data-view="je"]').classList.add("active");
-  document.getElementById("view-je").classList.add("active");
+  showView("je");
   document.getElementById("jeTxnSelect").value=data.id;
   onJeTxnChange();
 });
@@ -230,7 +237,7 @@ async function recategorizeTxn(id, toAdjustment){
   renderTransactionsTab(); renderAdjTable(); renderTrialBalance(); renderAdjustedTrialBalance(); renderDashboard(); populateJeTxnSelect();
   toast(toAdjustment ? "Moved to Adjusting Entries" : "Moved to Transactions");
 }
-function statusPill(status){ return `<span class="pill" style="color:${status==='Recorded'?'var(--good)':'var(--warn)'}">${status}</span>`; }
+function statusPill(status){ return `<span class="pill ${status==='Recorded'?'good':'warn'}">${status}</span>`; }
 function renderTransactionsTab(){
   const tbody=document.querySelector("#txnTable tbody"); tbody.innerHTML="";
   const regular=transactions.filter(t=>!t.is_adjustment);
@@ -238,8 +245,8 @@ function renderTransactionsTab(){
   regular.slice().sort((a,b)=>b.date.localeCompare(a.date)).forEach(t=>{
     const tr=document.createElement("tr");
     tr.innerHTML=`<td>${fmtDate(t.date)}</td><td>${esc(t.description)}</td><td>${statusPill(txnStatus(t))}</td>
-      <td><button class="iconbtn" data-view-id="${t.id}" title="View entries">👁</button> <button class="iconbtn" data-del-txn="${t.id}" title="Delete">✕</button>
-        <button class="btn ghost" style="font-size:11px;padding:4px 8px" data-to-adj="${t.id}">Move to Adjusting</button></td>`;
+      <td class="actionscell"><button class="btn ghost sm" data-to-adj="${t.id}">Move to Adjusting</button>
+        ${iconBtn("eye","View entries",`data-view-id="${t.id}"`)} ${iconBtn("trash","Delete transaction",`data-del-txn="${t.id}"`,true)}</td>`;
     tbody.appendChild(tr);
   });
   tbody.querySelectorAll("[data-view-id]").forEach(b=>b.addEventListener("click",()=>showTxnDetail(b.dataset.viewId)));
@@ -254,15 +261,19 @@ function showTxnDetail(id){
   const rows=lines.map(l=>{ const a=accounts.find(x=>x.id===l.account_id);
     return `<tr><td>${a?esc(a.account_name):"—"}</td><td style="text-align:right">${Number(l.debit)>0?money(l.debit):"—"}</td><td style="text-align:right">${Number(l.credit)>0?money(l.credit):"—"}</td></tr>`;
   }).join("") || '<tr><td colspan="3" style="color:var(--muted)">No journal entries posted yet.</td></tr>';
-  box.innerHTML=`<strong>Transaction ${shortId(t.id)}</strong> · ${fmtDate(t.date)} · ${esc(t.description)} · ${statusPill(txnStatus(t))}
-    <table style="margin-top:10px"><thead><tr><th>Account</th><th style="text-align:right">Debit</th><th style="text-align:right">Credit</th></tr></thead><tbody>${rows}</tbody></table>`;
+  box.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+      <div><strong>Transaction ${shortId(t.id)}</strong> · ${fmtDate(t.date)} · ${esc(t.description)} · ${statusPill(txnStatus(t))}</div>
+      ${iconBtn("x","Close details",'data-close-detail')}</div>
+    <div class="tablewrap"><table style="margin-top:10px"><thead><tr><th>Account</th><th style="text-align:right">Debit</th><th style="text-align:right">Credit</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  box.querySelector("[data-close-detail]").addEventListener("click",()=>{ box.style.display="none"; });
+  box.scrollIntoView({behavior:"smooth",block:"nearest"});
 }
 function renderAccountChips(){
   const wrap=document.getElementById("accountChips"); wrap.innerHTML="";
   accounts.slice().sort((a,b)=>a.account_number.localeCompare(b.account_number,undefined,{numeric:true})).forEach(a=>{
-    const b=document.createElement("button"); b.className="btn ghost"; b.style.fontSize="12px"; b.style.padding="6px 10px";
+    const b=document.createElement("button"); b.className="btn ghost"; b.dataset.chip=a.id;
     b.textContent=a.account_number+" — "+a.account_name;
-    b.addEventListener("click",()=>showAccountLedger(a.id));
+    b.addEventListener("click",()=>{ wrap.querySelectorAll(".btn").forEach(x=>{ x.classList.toggle("active",x===b); x.setAttribute("aria-pressed",x===b); }); showAccountLedger(a.id); });
     wrap.appendChild(b);
   });
 }
@@ -295,13 +306,13 @@ function onJeTxnChange(){
 }
 function addLineRow(wrapId,barId){
   const wrap=document.getElementById(wrapId);
-  const row=document.createElement("div"); row.className="linegrid"; row.style.cssText="display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:8px;margin-bottom:6px;";
-  const sel=document.createElement("select"); sel.className="lineAcctSel";
+  const row=document.createElement("div"); row.className="linegrid";
+  const sel=document.createElement("select"); sel.className="lineAcctSel"; sel.setAttribute("aria-label","Account");
   sel.innerHTML='<option value="">Select account…</option>'+accounts.slice().sort((a,b)=>a.account_number.localeCompare(b.account_number,undefined,{numeric:true}))
     .map(a=>`<option value="${a.id}">${esc(a.account_number)} — ${esc(a.account_name)}</option>`).join("");
-  const d=document.createElement("input"); d.type="text"; d.inputMode="decimal"; d.placeholder="0.00"; d.className="lineDebitInp"; d.style.textAlign="right";
-  const c=document.createElement("input"); c.type="text"; c.inputMode="decimal"; c.placeholder="0.00"; c.className="lineCreditInp"; c.style.textAlign="right";
-  const rm=document.createElement("button"); rm.className="iconbtn"; rm.textContent="✕";
+  const d=document.createElement("input"); d.type="text"; d.inputMode="decimal"; d.placeholder="Debit 0.00"; d.className="lineDebitInp"; d.setAttribute("aria-label","Debit");
+  const c=document.createElement("input"); c.type="text"; c.inputMode="decimal"; c.placeholder="Credit 0.00"; c.className="lineCreditInp"; c.setAttribute("aria-label","Credit");
+  const rm=document.createElement("button"); rm.className="iconbtn danger"; rm.innerHTML=ICONS.x; rm.title="Remove line"; rm.setAttribute("aria-label","Remove line");
   rm.addEventListener("click",()=>{ if(wrap.children.length>2){row.remove();updateLineBalanceBar(wrapId,barId);} else toast("An entry needs at least two lines"); });
   [d,c].forEach(inp=>inp.addEventListener("input",()=>{ if(inp===d&&d.value)c.value=""; if(inp===c&&c.value)d.value=""; updateLineBalanceBar(wrapId,barId); }));
   row.append(sel,d,c,rm); wrap.appendChild(row);
@@ -315,7 +326,7 @@ function lineRowAmounts(wrapId){
 function updateLineBalanceBar(wrapId,barId){
   const {debit,credit}=lineRowAmounts(wrapId); const bar=document.getElementById(barId); const diff=Math.round((debit-credit)*100)/100;
   bar.textContent=`Debits ${money(debit)} · Credits ${money(credit)}`+(diff!==0?` · Out of balance by ${money(Math.abs(diff))}`:" · Balanced");
-  bar.style.color = (diff===0&&debit>0) ? "var(--good)" : (diff!==0 ? "var(--bad)" : "var(--ink-2)");
+  setBar(bar, (diff===0&&debit>0) ? "good" : (diff!==0 ? "bad" : null));
 }
 document.getElementById("postJeBtn").addEventListener("click", async ()=>{
   clearErr("jeTxnSelect"); document.getElementById("err-jeLines").textContent="";
@@ -346,7 +357,7 @@ function renderJeTable(){
     const tr=document.createElement("tr");
     tr.innerHTML=`<td title="${l.transaction_id}">${txnLabel}</td><td>${a?esc(a.account_name):"—"}</td>
       <td style="text-align:right">${Number(l.debit)>0?money(l.debit):"—"}</td><td style="text-align:right">${Number(l.credit)>0?money(l.credit):"—"}</td>
-      <td><button class="iconbtn" data-del="${l.id}">✕</button></td>`;
+      <td class="actionscell">${iconBtn("trash","Delete line",`data-del="${l.id}"`,true)}</td>`;
     tbody.appendChild(tr);
   });
   tbody.querySelectorAll("[data-del]").forEach(b=>b.addEventListener("click", async ()=>{
@@ -384,7 +395,7 @@ function renderTrialBalance(){
   document.querySelector("#tbTable tfoot").innerHTML=totalsRow("Totals",3,[totD,totC]);
   const bar=document.getElementById("tbBalanceBar"); const diff=Math.round((totD-totC)*100)/100;
   bar.textContent=`Total debits ${money(totD)} · Total credits ${money(totC)}`+(diff===0?" · Balanced ✓":` · Out of balance by ${money(Math.abs(diff))}`);
-  bar.style.color = diff===0 ? "var(--good)" : "var(--bad)";
+  setBar(bar, diff===0 ? "good" : "bad");
 }
 
 // ---------- Adjusting Entries ----------
@@ -469,8 +480,8 @@ function renderAdjTable(){
   adjs.slice().sort((a,b)=>b.date.localeCompare(a.date)).forEach(t=>{
     const tr=document.createElement("tr");
     tr.innerHTML=`<td>${fmtDate(t.date)}</td><td>${esc(t.description)}</td><td style="color:var(--ink-2)">${esc(t.comment||"—")}</td><td>${statusPill(txnStatus(t))}</td>
-      <td><button class="iconbtn" data-edit="${t.id}" title="Edit">✎</button> <button class="iconbtn" data-del="${t.id}" title="Delete">✕</button>
-        <button class="btn ghost" style="font-size:11px;padding:4px 8px" data-to-reg="${t.id}">Move to Regular</button></td>`;
+      <td class="actionscell"><button class="btn ghost sm" data-to-reg="${t.id}">Move to Regular</button>
+        ${iconBtn("edit","Edit adjusting entry",`data-edit="${t.id}"`)} ${iconBtn("trash","Delete adjusting entry",`data-del="${t.id}"`,true)}</td>`;
     tbody.appendChild(tr);
   });
   tbody.querySelectorAll("[data-edit]").forEach(b=>b.addEventListener("click",()=>editAdjEntry(b.dataset.edit)));
@@ -502,7 +513,7 @@ function renderAdjustedTrialBalance(){
   document.querySelector("#atbTable tfoot").innerHTML=totalsRow("Totals",3,[totU_d,totU_c,totA_d,totA_c,totF_d,totF_c]);
   const bar=document.getElementById("atbBalanceBar"); const diff=Math.round((totF_d-totF_c)*100)/100;
   bar.textContent=`Unadjusted ${money(totU_d)} / ${money(totU_c)} · Adjustments ${money(totA_d)} / ${money(totA_c)} · Adjusted ${money(totF_d)} / ${money(totF_c)}`+(diff===0?" · Balanced ✓":` · Out of balance by ${money(Math.abs(diff))}`);
-  bar.style.color = diff===0 ? "var(--good)" : "var(--bad)";
+  setBar(bar, diff===0 ? "good" : "bad");
 
   // Pinpoint exactly which transactions are unbalanced (e.g. a line was deleted after posting)
   const byTxn={};
@@ -560,7 +571,7 @@ function renderIncomeStatement(){
       ${expRows.map(row).join("")||'<tr><td colspan="2" class="empty">None</td></tr>'}
       <tr><td><strong>Total expenses</strong></td><td style="text-align:right"><strong>${money(totalExp)}</strong></td></tr>
     </tbody></table>
-    <div class="balancebar" style="margin-top:14px;padding:12px;border-radius:8px;background:var(--surface-2);font-weight:700;color:${totalRev-totalExp>=0?'var(--good)':'var(--bad)'}">
+    <div class="balancebar ${totalRev-totalExp>=0?'good':'bad'}" style="font-size:15px;font-weight:700">
       Net ${totalRev-totalExp>=0?"income":"loss"}: ${money(Math.abs(totalRev-totalExp))}
     </div>`;
 }
@@ -643,7 +654,7 @@ function renderCashFlow(){
   const ok=Math.round((ledgerEnd-beginning-net)*100)===0;
   bar.style.display="block";
   bar.textContent=`Cash accounts: ${accounts.filter(isCashAccount).map(a=>a.account_name).join(", ")} · Ledger cash balance on ${fmtDate(end)}: ${money(ledgerEnd)}`+(ok?" · Matches ✓":" · Does not match");
-  bar.style.color=ok?"var(--good)":"var(--bad)";
+  setBar(bar, ok?"good":"bad");
 }
 document.getElementById("cfStart").addEventListener("change", renderCashFlow);
 document.getElementById("cfEnd").addEventListener("change", renderCashFlow);
