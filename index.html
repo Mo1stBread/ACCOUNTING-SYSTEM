@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Ledgerline — Accounting Management System</title>
+<title>Accounting</title>
 <link rel="stylesheet" href="styles.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 </head>
@@ -11,7 +11,7 @@
 
 <div id="authScreen">
   <form class="card" id="authForm" novalidate>
-    <div class="brand"><div class="mark" aria-hidden="true">$</div><div><h1>Ledgerline</h1><p>Accounting for your business</p></div></div>
+    <div class="brand"><div class="mark" aria-hidden="true">$</div><div><h1>Accounting</h1><p>Books &amp; financial statements</p></div></div>
     <h2>Sign in</h2>
     <p class="sub">You must be signed in to use this system — your data is private to your account.</p>
     <div class="field"><label for="authEmail">Email</label><input id="authEmail" type="email" autocomplete="email" required></div>
@@ -25,27 +25,28 @@
 </div>
 
 <div id="appScreen" style="display:none">
-<header>
-  <div class="headrow">
-    <div class="brand"><div class="mark" aria-hidden="true">$</div><div><h1>Ledgerline</h1><p>Accounting for your business</p></div></div>
-    <div class="ctl">
-      <button class="btn ghost" id="exportBtn">Export to Excel</button>
-      <button class="btn ghost" id="signOutBtn">Sign out</button>
-    </div>
-  </div>
+<aside class="sidebar">
+  <div class="brand"><div class="mark" aria-hidden="true">$</div><div><h1>Accounting</h1><p>Books &amp; financial statements</p></div></div>
   <nav id="mainNav" aria-label="Sections">
+    <p class="navgroup">Overview</p>
     <button class="tab active" data-view="dash" aria-current="page">Dashboard</button>
+    <p class="navgroup">Bookkeeping</p>
     <button class="tab" data-view="coa">Chart of Accounts</button>
     <button class="tab" data-view="txn">Transactions</button>
     <button class="tab" data-view="je">Journal Entries</button>
-    <button class="tab" data-view="tb">Trial Balance</button>
     <button class="tab" data-view="adj">Adjusting Entries</button>
+    <p class="navgroup">Reports</p>
+    <button class="tab" data-view="tb">Trial Balance</button>
     <button class="tab" data-view="atb">Adjusted Trial Balance</button>
     <button class="tab" data-view="is">Income Statement</button>
     <button class="tab" data-view="soe">Owner's Equity</button>
     <button class="tab" data-view="cf">Cash Flow</button>
   </nav>
-</header>
+  <div class="sidefoot">
+    <button class="btn gold" id="exportBtn">Export to Excel</button>
+    <button class="btn side" id="signOutBtn">Sign out</button>
+  </div>
+</aside>
 <main>
 
   <!-- DASHBOARD -->

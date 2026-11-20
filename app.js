@@ -42,7 +42,7 @@ document.getElementById("signOutBtn").addEventListener("click", async ()=>{ awai
 
 sb.auth.onAuthStateChange((event, session)=>{
   user = session ? session.user : null;
-  if(user){ document.getElementById("authScreen").style.display="none"; document.getElementById("appScreen").style.display="block"; boot(); }
+  if(user){ document.getElementById("authScreen").style.display="none"; document.getElementById("appScreen").style.display="flex"; boot(); }
   else{ document.getElementById("authScreen").style.display="flex"; document.getElementById("appScreen").style.display="none"; }
 });
 
@@ -708,7 +708,7 @@ document.getElementById("exportBtn").addEventListener("click", ()=>{
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(soeRows), "Statement of Owner's Equity");
   }
 
-  XLSX.writeFile(wb, "ledgerline-export.xlsx");
+  XLSX.writeFile(wb, "accounting-export.xlsx");
   toast("Exported to Excel");
 });
 })();
