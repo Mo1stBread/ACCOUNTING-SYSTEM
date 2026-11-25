@@ -214,9 +214,10 @@
   <section class="view" id="view-sfp">
     <div class="card">
       <h2>Statement of financial position</h2>
-      <p class="sub">Account balances as of the date you choose, including regular and adjusting entries. Equipment, furniture, buildings, land, vehicles and accumulated depreciation are non-current assets; long-term loans, mortgages and bonds are non-current liabilities. Owner's equity includes net income to date and is reduced by drawings.</p>
+      <p class="sub">Asset and liability balances as of the "To" date, including regular and adjusting entries; owner's equity rolls forward over the period like the statement of owner's equity. Equipment, furniture, buildings, land, vehicles and accumulated depreciation are non-current assets; long-term loans, mortgages and bonds are non-current liabilities.</p>
       <div class="row">
-        <div class="field"><label for="sfpDate">As of</label><input type="date" id="sfpDate"></div>
+        <div class="field"><label for="sfpStart">From</label><input type="date" id="sfpStart"></div>
+        <div class="field"><label for="sfpEnd">To</label><input type="date" id="sfpEnd"></div>
       </div>
       <div id="sfpOutput" class="stmt" style="margin-top:16px"></div>
       <div class="balancebar" id="sfpBalanceBar" style="display:none"></div>
