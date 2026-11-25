@@ -63,8 +63,9 @@ async function boot(){
   const today=new Date(), firstOfMonth=new Date(today.getFullYear(),today.getMonth(),1).toISOString().slice(0,10), todayStr=today.toISOString().slice(0,10);
   document.getElementById("isStart").value=firstOfMonth; document.getElementById("isEnd").value=todayStr;
   document.getElementById("soeStart").value=firstOfMonth; document.getElementById("soeEnd").value=todayStr;
+  document.getElementById("sfpDate").value=todayStr;
   document.getElementById("cfStart").value=firstOfMonth; document.getElementById("cfEnd").value=todayStr;
-  renderIncomeStatement(); renderSOE(); renderCashFlow();
+  renderIncomeStatement(); renderSOE(); renderFinancialPosition(); renderCashFlow();
 }
 async function loadAll(){
   const [a,t,j]=await Promise.all([
@@ -83,6 +84,7 @@ function showView(view){
   document.querySelectorAll("nav .tab").forEach(b=>{ const on=b.dataset.view===view; b.classList.toggle("active",on); if(on){ b.setAttribute("aria-current","page"); b.scrollIntoView({block:"nearest",inline:"nearest"}); } else b.removeAttribute("aria-current"); });
   document.querySelectorAll(".view").forEach(v=>v.classList.toggle("active",v.id==="view-"+view));
   if(view==="dash") renderDashboard();
+  if(view==="sfp") renderFinancialPosition();
   if(view==="cf") renderCashFlow();
   window.scrollTo(0,0);
 }
@@ -605,6 +607,57 @@ function renderSOE(){
 document.getElementById("soeStart").addEventListener("change", renderSOE);
 document.getElementById("soeEnd").addEventListener("change", renderSOE);
 
+// ---------- Statement of Financial Position ----------
+// Balances as of a date (all regular + adjusting entries on or before it). Equity = capital accounts
+// + cumulative net income − drawings, so Assets should equal Liabilities + Equity.
+function isNonCurrentAsset(a){ return /equipment|furniture|fixture|building|land|vehicle|truck|machin|property|investment|computer|tools|depreciation/i.test(a.account_name); }
+function isNonCurrentLiability(a){ return /long[- ]?term|mortgage|bond/i.test(a.account_name); }
+function computeFinancialPosition(asOf){
+  const dayAfter=new Date(new Date(asOf+"T00:00:00").getTime()+864e5).toISOString().slice(0,10);
+  const bal=(a,side)=>netAmount(entriesForAccountBefore(a.id,dayAfter),side);
+  const pick=(type,side,filter)=>accounts.filter(a=>a.account_type===type&&filter(a)).map(a=>({name:a.account_name,amt:bal(a,side)})).filter(r=>Math.abs(r.amt)>=0.005);
+  const curAssets=pick("Asset","Debit",a=>!isNonCurrentAsset(a)), ncAssets=pick("Asset","Debit",isNonCurrentAsset);
+  const curLiabs=pick("Liability","Credit",a=>!isNonCurrentLiability(a)), ncLiabs=pick("Liability","Credit",isNonCurrentLiability);
+  const capital=pick("Equity","Credit",a=>!isDrawing(a));
+  const drawings=accounts.filter(isDrawing).reduce((s,a)=>s+bal(a,"Debit"),0);
+  const netIncome=computeNetIncome("0000-01-01",asOf).netIncome;
+  const sum=rows=>rows.reduce((s,r)=>s+r.amt,0);
+  const totalAssets=sum(curAssets)+sum(ncAssets), totalLiabs=sum(curLiabs)+sum(ncLiabs);
+  const totalEquity=sum(capital)+netIncome-drawings;
+  return {curAssets,ncAssets,curLiabs,ncLiabs,capital,drawings,netIncome,totalAssets,totalLiabs,totalEquity};
+}
+function renderFinancialPosition(){
+  const out=document.getElementById("sfpOutput"), bar=document.getElementById("sfpBalanceBar");
+  const asOf=document.getElementById("sfpDate").value;
+  if(!asOf){ out.innerHTML='<p class="empty">Pick a date.</p>'; bar.style.display="none"; return; }
+  const p=computeFinancialPosition(asOf);
+  const fmt=amt=>amt<0?`(${money(-amt)})`:money(amt);
+  const row=(label,amt,strong)=>`<tr${strong?' class="subtotal"':''}><td>${label}</td><td>${fmt(amt)}</td></tr>`;
+  const none='<tr><td colspan="2" style="text-align:left;color:var(--muted)">&nbsp;&nbsp;None</td></tr>';
+  const section=(title,rows,totalLabel)=>`<tr><td colspan="2" style="text-align:left"><em>${title}</em></td></tr>`+
+    (rows.map(r=>row("&nbsp;&nbsp;"+esc(r.name),r.amt)).join("")||none)+row(totalLabel,rows.reduce((s,r)=>s+r.amt,0),true);
+  out.innerHTML=`<p class="sub">As of ${fmtDate(asOf)}</p>
+    <table><thead><tr><th>Assets</th><th></th></tr></thead><tbody>
+      ${section("Current assets",p.curAssets,"Total current assets")}
+      ${section("Non-current assets",p.ncAssets,"Total non-current assets")}
+    </tbody><tfoot>${totalsRow("Total assets",1,[p.totalAssets])}</tfoot></table>
+    <table><thead><tr><th>Liabilities and owner's equity</th><th></th></tr></thead><tbody>
+      ${section("Current liabilities",p.curLiabs,"Total current liabilities")}
+      ${section("Non-current liabilities",p.ncLiabs,"Total non-current liabilities")}
+      ${row("Total liabilities",p.totalLiabs,true)}
+      <tr><td colspan="2" style="text-align:left"><em>Owner's equity</em></td></tr>
+      ${p.capital.map(r=>row("&nbsp;&nbsp;"+esc(r.name),r.amt)).join("")}
+      ${row("&nbsp;&nbsp;Add: Net income to date (or less: net loss)",p.netIncome)}
+      ${p.drawings?row("&nbsp;&nbsp;Less: Owner drawings",-p.drawings):""}
+      ${row("Total owner's equity",p.totalEquity,true)}
+    </tbody><tfoot>${totalsRow("Total liabilities and owner's equity",1,[p.totalLiabs+p.totalEquity])}</tfoot></table>`;
+  const diff=Math.round((p.totalAssets-p.totalLiabs-p.totalEquity)*100)/100;
+  bar.style.display="block";
+  bar.textContent=`Assets ${money(p.totalAssets)} · Liabilities + equity ${money(p.totalLiabs+p.totalEquity)}`+(diff===0?" · Balanced ✓":` · Out of balance by ${money(Math.abs(diff))}`);
+  setBar(bar, diff===0?"good":"bad");
+}
+document.getElementById("sfpDate").addEventListener("change", renderFinancialPosition);
+
 // ---------- Cash Flow (direct method) ----------
 // Cash accounts = Asset accounts named like cash/bank. Each entry's cash change is attributed to the
 // non-cash accounts on the opposite side, in proportion, then grouped by activity.
@@ -706,6 +759,17 @@ document.getElementById("exportBtn").addEventListener("click", ()=>{
     const soeRows=[{"Line":"Period","Amount":soeStart+" to "+soeEnd},{"Line":"Beginning Capital","Amount":beginning},{"Line":"Owner Investments","Amount":investments},
       {"Line":"Net Income","Amount":netIncome},{"Line":"Owner Drawings","Amount":-drawings},{"Line":"Ending Capital","Amount":beginning+investments+netIncome-drawings}];
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(soeRows), "Statement of Owner's Equity");
+  }
+
+  const sfpDate=document.getElementById("sfpDate").value;
+  if(sfpDate){
+    const p=computeFinancialPosition(sfpDate), L=rows=>rows.map(r=>({"Line":r.name,"Amount":r.amt}));
+    const sfpRows=[{"Line":"As of","Amount":sfpDate},{},{"Line":"Current Assets"},...L(p.curAssets),{"Line":"Non-current Assets"},...L(p.ncAssets),
+      {"Line":"Total Assets","Amount":p.totalAssets},{},{"Line":"Current Liabilities"},...L(p.curLiabs),{"Line":"Non-current Liabilities"},...L(p.ncLiabs),
+      {"Line":"Total Liabilities","Amount":p.totalLiabs},{},{"Line":"Owner's Equity"},...L(p.capital),{"Line":"Net Income to Date","Amount":p.netIncome},
+      {"Line":"Owner Drawings","Amount":-p.drawings},{"Line":"Total Owner's Equity","Amount":p.totalEquity},{},
+      {"Line":"Total Liabilities and Owner's Equity","Amount":p.totalLiabs+p.totalEquity}];
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(sfpRows), "Financial Position");
   }
 
   XLSX.writeFile(wb, "accounting-export.xlsx");
