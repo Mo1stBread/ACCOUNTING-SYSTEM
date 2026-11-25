@@ -20,7 +20,7 @@ const ICONS={
   trash:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6"/></svg>',
   edit:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>'
 };
-function iconBtn(icon,label,attrs,danger){ return `<button class="iconbtn${danger?" danger":""}" ${attrs} title="${label}" aria-label="${label}">${ICONS[icon]}</button>`; }
+function iconBtn(icon,label,attrs,danger){ return `<button class="iconbtn${danger?" danger":""}${icon==="edit"?" edit":""}" ${attrs} title="${label}" aria-label="${label}">${ICONS[icon]}</button>`; }
 function setBar(bar,state){ bar.classList.remove("good","bad"); if(state) bar.classList.add(state); }
 function clearErr(id){document.getElementById("err-"+id).textContent="";document.getElementById(id).classList.remove("err");}
 function setErr(id,m){document.getElementById("err-"+id).textContent=m;document.getElementById(id).classList.add("err");}
@@ -346,12 +346,50 @@ document.getElementById("postJeBtn").addEventListener("click", async ()=>{
   if(Math.round((debit-credit)*100)!==0){ document.getElementById("err-jeLines").textContent="Total debits must equal total credits."; bad=true; }
   if(debit===0){ document.getElementById("err-jeLines").textContent="Enter at least one amount greater than zero."; bad=true; }
   if(bad) return;
-  const {data,error}=await sb.from("journal_entries").insert(linesToInsert).select();
-  if(error){ toast("Couldn't post entry: "+error.message); return; }
-  journalEntries.push(...data);
-  document.getElementById("jeLines").innerHTML=""; addLineRow("jeLines","jeBalanceBar"); addLineRow("jeLines","jeBalanceBar"); updateLineBalanceBar("jeLines","jeBalanceBar"); onJeTxnChange();
-  renderJeTable(); renderTransactionsTab(); renderTrialBalance(); renderAdjustedTrialBalance(); renderDashboard(); toast("Journal entry posted");
+  if(editingJeTxnId){
+    // Lines of one transaction must balance together, so editing replaces all of that transaction's lines
+    const {error:delErr}=await sb.from("journal_entries").delete().eq("transaction_id",editingJeTxnId);
+    if(delErr){ toast("Couldn't update lines: "+delErr.message); return; }
+    const {data,error}=await sb.from("journal_entries").insert(linesToInsert).select();
+    if(error){ toast("Couldn't save lines: "+error.message); return; }
+    journalEntries=journalEntries.filter(j=>j.transaction_id!==editingJeTxnId).concat(data);
+    toast("Journal entry updated");
+  } else {
+    const {data,error}=await sb.from("journal_entries").insert(linesToInsert).select();
+    if(error){ toast("Couldn't post entry: "+error.message); return; }
+    journalEntries.push(...data);
+    toast("Journal entry posted");
+  }
+  resetJeForm();
+  renderJeTable(); renderTransactionsTab(); renderTrialBalance(); renderAdjustedTrialBalance(); renderDashboard();
 });
+let editingJeTxnId=null;
+document.getElementById("cancelJeEditBtn").addEventListener("click", resetJeForm);
+function resetJeForm(){
+  editingJeTxnId=null;
+  document.getElementById("jeFormTitle").textContent="Post a journal entry";
+  document.getElementById("postJeBtn").textContent="Post entry";
+  document.getElementById("cancelJeEditBtn").style.display="none";
+  document.getElementById("jeTxnSelect").disabled=false;
+  document.getElementById("jeLines").innerHTML=""; addLineRow("jeLines","jeBalanceBar"); addLineRow("jeLines","jeBalanceBar"); updateLineBalanceBar("jeLines","jeBalanceBar"); onJeTxnChange();
+}
+function editJeEntry(txnId){
+  if(!transactions.find(x=>x.id===txnId)){ toast("This entry's transaction no longer exists"); return; }
+  editingJeTxnId=txnId;
+  document.getElementById("jeFormTitle").textContent="Editing journal entry";
+  document.getElementById("postJeBtn").textContent="Save changes";
+  document.getElementById("cancelJeEditBtn").style.display="inline-block";
+  const sel=document.getElementById("jeTxnSelect"); sel.value=txnId; sel.disabled=true; onJeTxnChange();
+  const wrap=document.getElementById("jeLines"); wrap.innerHTML="";
+  const lines=journalEntries.filter(j=>j.transaction_id===txnId);
+  lines.forEach(()=>addLineRow("jeLines","jeBalanceBar"));
+  while(wrap.children.length<2) addLineRow("jeLines","jeBalanceBar");
+  const rows=wrap.querySelectorAll(":scope > div");
+  lines.forEach((l,i)=>{ rows[i].querySelector(".lineAcctSel").value=l.account_id;
+    if(Number(l.debit)>0) rows[i].querySelector(".lineDebitInp").value=l.debit; if(Number(l.credit)>0) rows[i].querySelector(".lineCreditInp").value=l.credit; });
+  updateLineBalanceBar("jeLines","jeBalanceBar");
+  document.querySelector('#view-je .card').scrollIntoView({behavior:"smooth"});
+}
 function renderJeTable(){
   const tbody=document.querySelector("#jeTable tbody"); tbody.innerHTML="";
   document.getElementById("jeEmpty").style.display=journalEntries.length?"none":"block";
@@ -361,9 +399,10 @@ function renderJeTable(){
     const tr=document.createElement("tr");
     tr.innerHTML=`<td title="${l.transaction_id}">${txnLabel}</td><td>${a?esc(a.account_name):"—"}</td>
       <td style="text-align:right">${Number(l.debit)>0?money(l.debit):"—"}</td><td style="text-align:right">${Number(l.credit)>0?money(l.credit):"—"}</td>
-      <td class="actionscell">${iconBtn("trash","Delete line",`data-del="${l.id}"`,true)}</td>`;
+      <td class="actionscell">${t?iconBtn("edit","Edit journal entry",`data-edit="${l.transaction_id}"`):""} ${iconBtn("trash","Delete line",`data-del="${l.id}"`,true)}</td>`;
     tbody.appendChild(tr);
   });
+  tbody.querySelectorAll("[data-edit]").forEach(b=>b.addEventListener("click",()=>editJeEntry(b.dataset.edit)));
   tbody.querySelectorAll("[data-del]").forEach(b=>b.addEventListener("click", async ()=>{
     if(!confirm("Delete this journal entry line?")) return;
     const {error}=await sb.from("journal_entries").delete().eq("id",b.dataset.del);

@@ -116,7 +116,7 @@
   <!-- JOURNAL ENTRIES -->
   <section class="view" id="view-je">
     <div class="card">
-      <h2>Post a journal entry</h2>
+      <h2 id="jeFormTitle">Post a journal entry</h2>
       <p class="sub">Pick the transaction this entry belongs to, then add its debit/credit lines.</p>
       <div class="field"><label for="jeTxnSelect">Transaction</label><select id="jeTxnSelect"></select><div class="errtext" id="err-jeTxnSelect"></div></div>
       <p class="statusline" id="jeTxnStatus"></p>
@@ -125,7 +125,8 @@
       <button class="btn ghost sm" id="addJeLineBtn">+ Add line</button>
       <div class="balancebar" id="jeBalanceBar" aria-live="polite"></div>
       <div class="errtext" id="err-jeLines" role="alert"></div>
-      <div class="actions"><button class="btn" id="postJeBtn">Post entry</button></div>
+      <div class="actions"><button class="btn" id="postJeBtn">Post entry</button>
+        <button class="btn ghost" id="cancelJeEditBtn" style="display:none">Cancel edit</button></div>
     </div>
     <div class="card"><h2>All journal entries</h2>
       <div class="tablewrap"><table id="jeTable"><thead><tr><th>Transaction</th><th>Account</th><th class="num">Debit</th><th class="num">Credit</th><th><span class="sr-only">Actions</span></th></tr></thead><tbody></tbody></table></div>
