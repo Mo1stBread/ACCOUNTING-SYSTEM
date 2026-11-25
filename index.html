@@ -40,6 +40,7 @@
     <button class="tab" data-view="atb">Adjusted Trial Balance</button>
     <button class="tab" data-view="is">Income Statement</button>
     <button class="tab" data-view="soe">Owner's Equity</button>
+    <button class="tab" data-view="sfp">Financial Position</button>
     <button class="tab" data-view="cf">Cash Flow</button>
   </nav>
   <div class="sidefoot">
@@ -206,6 +207,19 @@
         <div class="field"><label for="soeEnd">To</label><input type="date" id="soeEnd"></div>
       </div>
       <div id="soeOutput" class="stmt" style="margin-top:16px"></div>
+    </div>
+  </section>
+
+  <!-- FINANCIAL POSITION -->
+  <section class="view" id="view-sfp">
+    <div class="card">
+      <h2>Statement of financial position</h2>
+      <p class="sub">Account balances as of the date you choose, including regular and adjusting entries. Equipment, furniture, buildings, land, vehicles and accumulated depreciation are non-current assets; long-term loans, mortgages and bonds are non-current liabilities. Owner's equity includes net income to date and is reduced by drawings.</p>
+      <div class="row">
+        <div class="field"><label for="sfpDate">As of</label><input type="date" id="sfpDate"></div>
+      </div>
+      <div id="sfpOutput" class="stmt" style="margin-top:16px"></div>
+      <div class="balancebar" id="sfpBalanceBar" style="display:none"></div>
     </div>
   </section>
 
