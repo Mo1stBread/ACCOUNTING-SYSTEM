@@ -84,6 +84,8 @@ function showView(view){
   document.querySelectorAll("nav .tab").forEach(b=>{ const on=b.dataset.view===view; b.classList.toggle("active",on); if(on){ b.setAttribute("aria-current","page"); b.scrollIntoView({block:"nearest",inline:"nearest"}); } else b.removeAttribute("aria-current"); });
   document.querySelectorAll(".view").forEach(v=>v.classList.toggle("active",v.id==="view-"+view));
   if(view==="dash") renderDashboard();
+  if(view==="is") renderIncomeStatement();
+  if(view==="soe") renderSOE();
   if(view==="sfp") renderFinancialPosition();
   if(view==="cf") renderCashFlow();
   window.scrollTo(0,0);
@@ -105,7 +107,7 @@ document.getElementById("addAccountBtn").addEventListener("click", async ()=>{
   const {data,error}=await sb.from("accounts").insert(row).select().single();
   if(error){ toast("Couldn't add account: "+error.message); return; }
   accounts.push(data); numEl.value=""; nameEl.value=""; descEl.value="";
-  renderAccounts(); renderAccountChips(); renderDashboard(); toast("Account added");
+  renderAccounts(); renderAccountChips(); renderDashboard(); refreshLineAccountOptions(); toast("Account added");
 });
 function accountHasEntries(id){ return journalEntries.some(j=>j.account_id===id); }
 function renderAccounts(){
@@ -126,7 +128,7 @@ function renderAccounts(){
     if(!confirm("Delete this account?")) return;
     const {error}=await sb.from("accounts").delete().eq("id",b.dataset.del);
     if(error){ toast("Couldn't delete: "+error.message); return; }
-    accounts=accounts.filter(a=>a.id!==b.dataset.del); renderAccounts(); renderDashboard(); toast("Account deleted");
+    accounts=accounts.filter(a=>a.id!==b.dataset.del); renderAccounts(); renderAccountChips(); renderDashboard(); refreshLineAccountOptions(); toast("Account deleted");
   }));
   tbody.querySelectorAll("[data-nb]").forEach(sel=>sel.addEventListener("change", async ()=>{
     const id=sel.dataset.nb, value=sel.value;
@@ -308,12 +310,20 @@ function onJeTxnChange(){
   const t=transactions.find(x=>x.id===id);
   document.getElementById("jeTxnStatus").textContent = t ? "Current status: "+txnStatus(t) : "";
 }
+function accountOptionsHtml(){
+  return '<option value="">Select account…</option>'+accounts.slice().sort((a,b)=>a.account_number.localeCompare(b.account_number,undefined,{numeric:true}))
+    .map(a=>`<option value="${a.id}">${esc(a.account_number)} — ${esc(a.account_name)}</option>`).join("");
+}
+// Keep the account dropdowns in already-open entry lines in sync when accounts are added or deleted
+function refreshLineAccountOptions(){
+  const html=accountOptionsHtml();
+  document.querySelectorAll(".lineAcctSel").forEach(sel=>{ const cur=sel.value; sel.innerHTML=html; sel.value=cur; });
+}
 function addLineRow(wrapId,barId){
   const wrap=document.getElementById(wrapId);
   const row=document.createElement("div"); row.className="linegrid";
   const sel=document.createElement("select"); sel.className="lineAcctSel"; sel.setAttribute("aria-label","Account");
-  sel.innerHTML='<option value="">Select account…</option>'+accounts.slice().sort((a,b)=>a.account_number.localeCompare(b.account_number,undefined,{numeric:true}))
-    .map(a=>`<option value="${a.id}">${esc(a.account_number)} — ${esc(a.account_name)}</option>`).join("");
+  sel.innerHTML=accountOptionsHtml();
   const d=document.createElement("input"); d.type="text"; d.inputMode="decimal"; d.placeholder="Debit 0.00"; d.className="lineDebitInp"; d.setAttribute("aria-label","Debit");
   const c=document.createElement("input"); c.type="text"; c.inputMode="decimal"; c.placeholder="Credit 0.00"; c.className="lineCreditInp"; c.setAttribute("aria-label","Credit");
   const rm=document.createElement("button"); rm.className="iconbtn danger"; rm.innerHTML=ICONS.x; rm.title="Remove line"; rm.setAttribute("aria-label","Remove line");
@@ -326,6 +336,18 @@ function lineRowAmounts(wrapId){
   let debit=0,credit=0;
   document.querySelectorAll("#"+wrapId+" > div").forEach(r=>{ debit+=num(r.querySelector(".lineDebitInp").value); credit+=num(r.querySelector(".lineCreditInp").value); });
   return {debit,credit};
+}
+// Every row that carries an amount must have an account and a positive amount; otherwise the totals
+// would include amounts that never get saved and an unbalanced entry could slip through.
+function lineRowProblem(wrapId){
+  for(const r of document.querySelectorAll("#"+wrapId+" > div")){
+    const acc=r.querySelector(".lineAcctSel").value, dRaw=r.querySelector(".lineDebitInp").value.trim(), cRaw=r.querySelector(".lineCreditInp").value.trim();
+    const dv=num(dRaw), cv=num(cRaw);
+    if((dRaw&&!(dv>0)) || (cRaw&&!(cv>0))) return "Amounts must be numbers greater than zero.";
+    if(!acc && (dv>0||cv>0)) return "Pick an account for every line that has an amount.";
+    if(acc && !(dv>0||cv>0)) return "Enter a debit or credit amount for every line with an account, or remove the line.";
+  }
+  return "";
 }
 function updateLineBalanceBar(wrapId,barId){
   const {debit,credit}=lineRowAmounts(wrapId); const bar=document.getElementById(barId); const diff=Math.round((debit-credit)*100)/100;
@@ -345,6 +367,7 @@ document.getElementById("postJeBtn").addEventListener("click", async ()=>{
   const {debit,credit}=lineRowAmounts("jeLines");
   if(Math.round((debit-credit)*100)!==0){ document.getElementById("err-jeLines").textContent="Total debits must equal total credits."; bad=true; }
   if(debit===0){ document.getElementById("err-jeLines").textContent="Enter at least one amount greater than zero."; bad=true; }
+  const jeProblem=lineRowProblem("jeLines"); if(jeProblem){ document.getElementById("err-jeLines").textContent=jeProblem; bad=true; }
   if(bad) return;
   if(editingJeTxnId){
     // Lines of one transaction must balance together, so editing replaces all of that transaction's lines
@@ -486,6 +509,7 @@ document.getElementById("postAdjBtn").addEventListener("click", async ()=>{
   const {debit,credit}=lineRowAmounts("adjLines");
   if(Math.round((debit-credit)*100)!==0){ document.getElementById("err-adjLines").textContent="Total debits must equal total credits."; bad=true; }
   if(debit===0){ document.getElementById("err-adjLines").textContent="Enter at least one amount greater than zero."; bad=true; }
+  const adjProblem=lineRowProblem("adjLines"); if(adjProblem){ document.getElementById("err-adjLines").textContent=adjProblem; bad=true; }
   if(bad) return;
 
   if(editingAdjTxnId){
@@ -623,19 +647,26 @@ document.getElementById("isEnd").addEventListener("change", renderIncomeStatemen
 
 // ---------- Statement of Owner's Equity ----------
 function isDrawing(a){ return a.account_type==="Equity" && /draw/i.test(a.account_name); }
+// Equity roll-forward shared by the Owner's Equity and Financial Position statements.
+// Beginning capital includes all net income earned before the period (revenue − expenses not yet closed).
+function computeEquity(start,end){
+  let beginning=0, investments=0, drawings=0;
+  accounts.forEach(a=>{
+    const before=entriesForAccountBefore(a.id,start);
+    if(a.account_type==="Equity"||a.account_type==="Revenue") beginning+=netAmount(before,"Credit");
+    if(a.account_type==="Expense") beginning-=netAmount(before,"Debit");
+    if(a.account_type!=="Equity") return;
+    const period=entriesForAccountInRange(a.id,start,end);
+    if(isDrawing(a)) drawings+=netAmount(period,"Debit"); else investments+=netAmount(period,"Credit");
+  });
+  const netIncome=computeNetIncome(start,end).netIncome;
+  return {beginning,investments,netIncome,drawings,ending:beginning+investments+netIncome-drawings};
+}
 function renderSOE(){
   const start=document.getElementById("soeStart").value, end=document.getElementById("soeEnd").value;
   const out=document.getElementById("soeOutput");
   if(!start||!end){ out.innerHTML='<p class="empty">Pick a start and end date.</p>'; return; }
-  let beginning=0, investments=0, drawings=0;
-  accounts.filter(a=>a.account_type==="Equity").forEach(a=>{
-    beginning += netAmount(entriesForAccountBefore(a.id,start),"Credit");
-    const periodLines=entriesForAccountInRange(a.id,start,end);
-    if(isDrawing(a)) drawings += netAmount(periodLines,"Debit");
-    else investments += netAmount(periodLines,"Credit");
-  });
-  const {netIncome}=computeNetIncome(start,end);
-  const ending=beginning+investments+netIncome-drawings;
+  const {beginning,investments,netIncome,drawings,ending}=computeEquity(start,end);
   out.innerHTML=`<p class="sub">For the period ${fmtDate(start)} – ${fmtDate(end)}</p>
     <table><tbody>
       <tr><td>Beginning capital</td><td style="text-align:right">${money(beginning)}</td></tr>
@@ -663,20 +694,9 @@ function computeFinancialPosition(start,end){
   const pick=(type,side,filter)=>accounts.filter(a=>a.account_type===type&&filter(a)).map(a=>({name:a.account_name,amt:bal(a,side)})).filter(r=>Math.abs(r.amt)>=0.005);
   const curAssets=pick("Asset","Debit",a=>!isNonCurrentAsset(a)), ncAssets=pick("Asset","Debit",isNonCurrentAsset);
   const curLiabs=pick("Liability","Credit",a=>!isNonCurrentLiability(a)), ncLiabs=pick("Liability","Credit",isNonCurrentLiability);
-  // Equity roll-forward. Beginning equity includes all net income earned before the period.
-  let beginning=0, investments=0, drawings=0;
-  accounts.forEach(a=>{
-    const before=entriesForAccountBefore(a.id,start);
-    if(a.account_type==="Equity"||a.account_type==="Revenue") beginning+=netAmount(before,"Credit");
-    if(a.account_type==="Expense") beginning-=netAmount(before,"Debit");
-    if(a.account_type!=="Equity") return;
-    const period=entriesForAccountInRange(a.id,start,end);
-    if(isDrawing(a)) drawings+=netAmount(period,"Debit"); else investments+=netAmount(period,"Credit");
-  });
-  const netIncome=computeNetIncome(start,end).netIncome;
+  const {beginning,investments,netIncome,drawings,ending:totalEquity}=computeEquity(start,end);
   const sum=rows=>rows.reduce((s,r)=>s+r.amt,0);
   const totalAssets=sum(curAssets)+sum(ncAssets), totalLiabs=sum(curLiabs)+sum(ncLiabs);
-  const totalEquity=beginning+investments+netIncome-drawings;
   return {curAssets,ncAssets,curLiabs,ncLiabs,beginning,investments,netIncome,drawings,totalAssets,totalLiabs,totalEquity};
 }
 function renderFinancialPosition(){
@@ -805,15 +825,9 @@ document.getElementById("exportBtn").addEventListener("click", ()=>{
 
   const soeStart=document.getElementById("soeStart").value, soeEnd=document.getElementById("soeEnd").value;
   if(soeStart && soeEnd){
-    let beginning=0, investments=0, drawings=0;
-    accounts.filter(a=>a.account_type==="Equity").forEach(a=>{
-      beginning+=netAmount(entriesForAccountBefore(a.id,soeStart),"Credit");
-      const pl=entriesForAccountInRange(a.id,soeStart,soeEnd);
-      if(isDrawing(a)) drawings+=netAmount(pl,"Debit"); else investments+=netAmount(pl,"Credit");
-    });
-    const {netIncome}=computeNetIncome(soeStart,soeEnd);
+    const {beginning,investments,netIncome,drawings,ending}=computeEquity(soeStart,soeEnd);
     const soeRows=[{"Line":"Period","Amount":soeStart+" to "+soeEnd},{"Line":"Beginning Capital","Amount":beginning},{"Line":"Owner Investments","Amount":investments},
-      {"Line":"Net Income","Amount":netIncome},{"Line":"Owner Drawings","Amount":-drawings},{"Line":"Ending Capital","Amount":beginning+investments+netIncome-drawings}];
+      {"Line":"Net Income","Amount":netIncome},{"Line":"Owner Drawings","Amount":-drawings},{"Line":"Ending Capital","Amount":ending}];
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(soeRows), "Statement of Owner's Equity");
   }
 
